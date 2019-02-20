@@ -37,13 +37,13 @@
 #undef DEBUG_BT_VERBOSE
 void DBGPrintf(...) {};
 #else
-#define DBGPrintf Serial.printf
+#define DBGPrintf USBHDBGSerial.printf
 #endif
 
 #ifndef DEBUG_BT_VERBOSE
 void VDBGPrintf(...) {};
 #else
-#define VDBGPrintf Serial.printf
+#define VDBGPrintf USBHDBGSerial.printf
 #endif
 
 
@@ -147,6 +147,7 @@ enum {PC_RESET = 1, PC_WRITE_CLASS_DEVICE, PC_READ_BDADDR, PC_READ_LOCAL_VERSION
 
 //////////////
 
+
 // Setup some states for the TX pipe where we need to chain messages
 enum {STATE_TX_SEND_CONNECT_INT=200, STATE_TX_SEND_CONECT_RSP_SUCCESS, STATE_TX_SEND_CONFIG_REQ};
 
@@ -172,19 +173,23 @@ void BluetoothController::driver_ready_for_bluetooth(BTHIDInput *driver)
 // collection is returned, or NULL if no driver wants it.
 BTHIDInput * BluetoothController::find_driver(uint32_t device_type)
 {
-	Serial.printf("BluetoothController::find_driver");
+	USBHDBGSerial.printf("BluetoothController::find_driver");
 	BTHIDInput *driver = available_bthid_drivers_list;
 	while (driver) {
-		Serial.printf("  driver %x\n", (uint32_t)driver);
+		USBHDBGSerial.printf("  driver %x\n", (uint32_t)driver);
 		if (driver->claim_bluetooth(this, device_type)) {
-			Serial.printf("    *** Claimed ***\n");
+			USBHDBGSerial.printf("    *** Claimed ***\n");
 			return driver;
 		}
 		driver = driver->next;
 	}
 	return NULL;
 }
-
+//12 01 00 02 FF 01 01 40 5C 0A E8 21 12 01 01 02 03 01
+//VendorID = 0A5C, ProductID = 21E8, Version = 0112
+//Class/Subclass/Protocol = 255 / 1 / 1
+BluetoothController::product_vendor_mapping_t BluetoothController::pid_vid_mapping[] = {
+	{ 0xA5C, 0x21E8 }};
 
 /************************************************************/
 //  Initialization and claiming of devices & interfaces
@@ -203,11 +208,21 @@ bool BluetoothController::claim(Device_t *dev, int type, const uint8_t *descript
 	// only claim at device level 
 	println("BluetoothController claim this=", (uint32_t)this, HEX);
 
+	if (type != 0) return false; // claim at the device level
+
 	// Lets try to support the main USB Bluetooth class...
 	// http://www.usb.org/developers/defined_class/#BaseClassE0h
-	if (dev->bDeviceClass != 0xe0) return false;	// not base class wireless controller
+	if (dev->bDeviceClass != 0xe0)  {
+		bool special_case_device = false;
+		for (uint8_t i=0; i < (sizeof(pid_vid_mapping)/sizeof(pid_vid_mapping[0])); i++) {
+			if ((pid_vid_mapping[i].idVendor == dev->idVendor) && (pid_vid_mapping[i].idProduct == dev->idProduct)) {
+				special_case_device = true;
+				break;
+			}
+		}
+		if (!special_case_device) return false;
+	}
 	if ((dev->bDeviceSubClass != 1) || (dev->bDeviceProtocol != 1)) return false; // Bluetooth Programming Interface
-	if (type != 0) return false;
 
 	DBGPrintf("BluetoothController claim this=%x vid:pid=%x:%x\n    ", (uint32_t)this, dev->idVendor,  dev->idProduct);
 	if (len > 512) {
@@ -259,7 +274,7 @@ bool BluetoothController::claim(Device_t *dev, int type, const uint8_t *descript
 		descriptor_index += 7;  // setup to look at next one...
 	}
 	if ((rxep == 0) || (txep == 0)) {
-		Serial.printf("Bluetooth end points not found: %d %d\n", rxep, txep);
+		USBHDBGSerial.printf("Bluetooth end points not found: %d %d\n", rxep, txep);
 				return false; // did not find two end points.
 	}
 	DBGPrintf("    rxep=%d(%d) txep=%d(%d) rx2ep=%d(%d)\n", rxep&15, rx_size_, txep, tx_size_, 
@@ -302,7 +317,7 @@ bool BluetoothController::claim(Device_t *dev, int type, const uint8_t *descript
 
 void BluetoothController::disconnect()
 {
-	Serial.printf("Bluetooth Disconnect");
+	USBHDBGSerial.printf("Bluetooth Disconnect");
 	if (device_driver_) {
 		device_driver_->release_bluetooth();
 		device_driver_ = nullptr;
@@ -444,16 +459,16 @@ void BluetoothController::handle_hci_command_complete()
 			// received name back... 
 			{
 				//BUGBUG:: probably want to grab string object and copy to 
-				Serial.printf("    Local name: %s\n", &rxbuf_[6]);
+				USBHDBGSerial.printf("    Local name: %s\n", &rxbuf_[6]);
 /*
 				uint8_t len = rxbuf_[1]+2;	// Length field +2 for total bytes read
 				for (uint8_t i=6; i < len; i++) {
 					if (rxbuf_[i] == 0) {
 						break;
 					}
-					Serial.printf("%c", rxbuf_[i]);
+					USBHDBGSerial.printf("%c", rxbuf_[i]);
 				}
-				Serial.printf("\n"); */
+				USBHDBGSerial.printf("\n"); */
 			}
 			break;
 		case Write_Connection_Accept_Timeout:	//0x0c16
@@ -482,8 +497,8 @@ void BluetoothController::handle_hci_command_complete()
 			{
 	     		DBGPrintf("   BD Addr");
 	            for(uint8_t i = 0; i < 6; i++) {
-	            	my_bdaddr[i] = rxbuf_[6 + i];
-	            	DBGPrintf(":%x", my_bdaddr[i]);
+	            	my_bdaddr_[i] = rxbuf_[6 + i];
+	            	DBGPrintf(":%x", my_bdaddr_[i]);
 	            }
 				DBGPrintf("\n");
 			}
@@ -784,6 +799,18 @@ void BluetoothController::handle_hci_remote_name_complete() {
 		for (uint8_t *psz = &rxbuf_[9]; *psz; psz++) DBGPrintf("%c", *psz);
 		DBGPrintf("\n");
 	}
+	if (device_driver_) {
+	/*
+		if (!device_driver_->btstrbuf) {
+			device_driver_->btstrbuf = USBHost::allocate_string_buffer();
+			if (device_driver_->btstrbuf) {
+
+			}
+		}
+	*/
+		device_driver_->remoteNameComplete(&rxbuf_[9]);
+	}
+
 	// Lets now try to accept the connection. 
 	sendHCIAcceptConnectionRequest();
 }
