@@ -18,8 +18,8 @@ JoystickController joystick1(myusb);
 //BluetoothController bluet(myusb, true, "0000");   // Version does pairing to device
 BluetoothController bluet(myusb);   // version assumes it already was paired
 int user_axis[64];
-uint8_t buttons_prev = 0;
-uint8_t button;
+uint16_t buttons_prev = 0;
+uint16_t buttons;
 RawHIDController rawhid1(myusb);
 RawHIDController rawhid2(myusb, 0xffc90004);
 
@@ -38,6 +38,7 @@ const char * hid_driver_names[CNT_DEVICES] = {"Joystick1", "RawHid1", "RawHid2"}
 
 bool hid_driver_active[CNT_DEVICES] = {false, false, false};
 bool show_changed_only = false; 
+bool show_raw_data = false;
 
 uint8_t joystick_left_trigger_value = 0;
 uint8_t joystick_right_trigger_value = 0;
@@ -152,52 +153,25 @@ void loop()
       for (uint8_t i = 0; i<64; i++) {
           psAxis[i] = joystick1.getAxis(i);
       }
-
+      
+      switch (joystick1.joystickType) {
+        case JoystickController::UNKNOWN:
+        case JoystickController::PS4:
+          displayPS4Data();
+          break;
+        case JoystickController::PS3:
+          displayPS3Data();
+          break;
+        case JoystickController::XBOXONE:
+        case JoystickController::XBOX360:;
+          displayRawData();
+          break;
+      }
       //for (uint8_t i = 0; i < 24; i++) {
       //  Serial.printf(" %d:%d", i, psAxis[i]);
       //}
       //Serial.println();
         
-      Serial.printf("LX: %d, LY: %d, RX: %d, RY: %d \r\n", psAxis[1], psAxis[2], psAxis[3], psAxis[4]);
-      Serial.printf("L-Trig: %d, R-Trig: %d, Trig-Button: %d \r\n", psAxis[8], psAxis[9], psAxis[6]);
-      Serial.printf("Buttons: %d, PS: %d\r\n", psAxis[5], psAxis[7]);
-      Serial.printf("Arrows: %d\r\n", psAxis[0]);
-      Serial.printf("Battery level percentage: %2f.0 \r\n", (((float) psAxis[12])/255.0f)*100.0f);
-     
-      Serial.println();
-
-    uint8_t ltv;
-    uint8_t rtv;
-
-        ltv = psAxis[8];
-        rtv = psAxis[9];
-
-        if ((ltv != joystick_left_trigger_value) || (rtv != joystick_right_trigger_value)) {
-          joystick_left_trigger_value = ltv;
-          joystick_right_trigger_value = rtv;
-          Serial.printf("Rumbling: %d, %d\r\n", ltv, rtv);
-          joystick1.setRumble(ltv, rtv);
-        }
-        
-      /* Arrow Buttons (psAxis[0]):
-       *    0x08 is released, 
-       *    0=N, 1=NE, 2=E, 3=SE, 4=S, 
-       *    5=SW, 6=W, 7=NW)
-       */
-
-      if (psAxis[5] != buttons_prev) {
-          uint8_t lr = (psAxis[5] & 1) ? 0xff : 0;   //Srq
-          uint8_t lg = (psAxis[5] & 4) ? 0xff : 0;   //Cir
-          uint8_t lb = (psAxis[5] & 8) ? 0xff : 0;   //Tri
-                                                     //Cross = 2
-          Serial.print(psAxis[5]); Serial.print(", ");
-          Serial.print(lr); Serial.print(", "); 
-          Serial.print(lg); Serial.print(", "); 
-          Serial.println(lb); 
-
-          joystick1.setLEDs(lr, lg, lb);
-      }
-          buttons_prev =psAxis[5];
 
      joystick1.joystickDataClear();
   }
@@ -216,6 +190,116 @@ void loop()
     }
   }
 }
+
+void displayPS4Data()
+{
+  Serial.printf("LX: %d, LY: %d, RX: %d, RY: %d \r\n", psAxis[1], psAxis[2], psAxis[3], psAxis[4]);
+  Serial.printf("L-Trig: %d, R-Trig: %d, Trig-Button: %d \r\n", psAxis[8], psAxis[9], psAxis[6]);
+  Serial.printf("Buttons: %d, PS: %d\r\n", psAxis[5], psAxis[7]);
+  Serial.printf("Arrows: %d\r\n", psAxis[10]);
+  Serial.printf("Battery Status: %d\n", (psAxis[30] & (1 << 4) - 1));
+  Serial.println();
+
+  uint8_t ltv;
+  uint8_t rtv;
+
+    ltv = psAxis[8];
+    rtv = psAxis[9];
+
+    if ((ltv != joystick_left_trigger_value) || (rtv != joystick_right_trigger_value)) {
+      joystick_left_trigger_value = ltv;
+      joystick_right_trigger_value = rtv;
+      Serial.printf("Rumbling: %d, %d\r\n", ltv, rtv);
+      joystick1.setRumble(ltv, rtv);
+    }
+    
+  /* Arrow Buttons (psAxis[0]):
+   *    0x08 is released, 
+   *    0=N, 1=NE, 2=E, 3=SE, 4=S, 
+   *    5=SW, 6=W, 7=NW)
+   */
+
+  if (psAxis[5] != buttons_prev) {
+      uint8_t lr = (psAxis[5] & 1) ? 0xff : 0;   //Srq
+      uint8_t lg = (psAxis[5] & 4) ? 0xff : 0;   //Cir
+      uint8_t lb = (psAxis[5] & 8) ? 0xff : 0;   //Tri
+                                                 //Cross = 2
+      Serial.print(psAxis[5]); Serial.print(", ");
+      Serial.print(lr); Serial.print(", "); 
+      Serial.print(lg); Serial.print(", "); 
+      Serial.println(lb); 
+
+      joystick1.setLEDs(lr, lg, lb);
+      buttons_prev =psAxis[5];
+  }
+}
+
+void displayPS3Data()
+
+{
+  Serial.printf("LX: %d, LY: %d, RX: %d, RY: %d \r\n", psAxis[1], psAxis[2], psAxis[3], psAxis[4]);
+  Serial.printf("L-Trig: %d, R-Trig: %d, Trig-Button: %d \r\n", psAxis[8], psAxis[9], psAxis[6]);
+  Serial.printf("Buttons: %d, PS: %d\r\n", psAxis[5], psAxis[7]);
+  /*Arrows:
+   *  N = 16
+   * NE = 48
+   *  E = 32
+   * SE = 96
+   *  S = 64
+   * SW = 192
+   *  W = 128
+   * NW = 144
+   */
+  Serial.printf("Arrows: %d\r\n", psAxis[10]);
+  Serial.println();
+
+  uint8_t ltv;
+  uint8_t rtv;
+
+    ltv = psAxis[8];
+    rtv = psAxis[9];
+
+    if ((ltv != joystick_left_trigger_value) || (rtv != joystick_right_trigger_value)) {
+      joystick_left_trigger_value = ltv;
+      joystick_right_trigger_value = rtv;
+      Serial.printf("Rumbling: %d, %d\r\n", ltv, rtv);
+      joystick1.setRumble(ltv, rtv);
+    }
+    
+  if (psAxis[5] != buttons_prev) {
+      uint8_t lr = (psAxis[5] & 128) ? 0xff : 0;   //Srq
+      uint8_t lg = (psAxis[5] & 32) ? 0xff : 0;   //Cir
+      uint8_t lb = (psAxis[5] & 16) ? 0xff : 0;   //Tri
+                                                 //Cross = 64
+      Serial.print(psAxis[5]); Serial.print(", ");
+      Serial.print(lr); Serial.print(", "); 
+      Serial.print(lg); Serial.print(", "); 
+      Serial.println(lb); 
+
+      joystick1.setLEDs(lr, lg, lb);
+      buttons_prev =psAxis[5];
+  }
+}
+ 
+
+void displayRawData() {
+  uint64_t axis_mask = joystick1.axisMask();
+  uint64_t changed_mask = joystick1.axisChangedMask();
+  if (!changed_mask) return;
+
+  Serial.printf("%lx %lx:", axis_mask, changed_mask);
+  for (uint16_t index=0; axis_mask; index++) {
+    Serial.printf("%02x ", psAxis[index]);
+    axis_mask >>= 1;
+  }
+  Serial.println();
+  //for (uint8_t i = 0; i < 24; i++) {
+  //  Serial.printf(" %d:%d", i, psAxis[i]);
+  //}
+  //Serial.println();
+ 
+}
+
 
 bool OnReceiveHidData(uint32_t usage, const uint8_t *data, uint32_t len) {
   // Called for maybe both HIDS for rawhid basic test.  One is for the Teensy
