@@ -738,6 +738,9 @@ void JoystickController::disconnect()
 
 bool JoystickController::claim_bluetooth(BluetoothController *driver, uint32_t bluetooth_class, uint8_t *remoteName) 
 {
+	// If we are already in use than don't grab another one. 
+	if (btdevice) return false;
+
 	if ((((bluetooth_class & 0xff00) == 0x2500) || (((bluetooth_class & 0xff00) == 0x500))) && ((bluetooth_class & 0x3C) == 0x08)) {
 		DBGPrintf("JoystickController::claim_bluetooth TRUE\n");
 		btdriver_ = driver;
