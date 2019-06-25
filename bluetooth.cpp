@@ -907,6 +907,11 @@ void BluetoothController::handle_hci_disconnect_complete()
 #endif
 	// Now we need to remove that item from our list of connections.
 	count_connections_--;  
+	if (count_connections_ == 0) {
+		// reset the next connection counts back to initial states.
+		next_dcid_ = 0x70;		// Lets try not hard coding control and interrupt dcid
+	}
+
 	for (uint8_t i = current_connection_; i < count_connections_; i++) connections_[i] = connections_[i+1];
 	current_connection_ = 0;
 
@@ -1011,7 +1016,8 @@ void BluetoothController::rx2_data(const Transfer_t *transfer)
 		// All the lengths appear to be correct...  need to do more...
 		// See if we should set the current_connection...
 		for (uint8_t i = 0; i < count_connections_; i++) {
-			if (connections_[i].interrupt_dcid_ == buffer[6]) {
+			//if (connections_[i].interrupt_dcid_ == buffer[6]) {
+			if (connections_[i].device_connection_handle_ == buffer[0]) {
 				current_connection_ = i;
 				break;
 			}
@@ -1515,7 +1521,7 @@ void BluetoothController::handleHIDTHDRData(uint8_t *data) {
 	//                      T HID data
 	//48 20 d 0 9 0 71 0 a1 3 8a cc c5 a 23 22 79
 	uint16_t len = data[4] + ((uint16_t)data[5] << 8);
-	DBGPrintf("HID HDR Data: len: %d, Type: %d\n", len, data[9]);
+	DBGPrintf("HID HDR Data: len: %d, Type: %d Con:%d\n", len, data[9], current_connection_);
 
 	// ??? How to parse??? Use HID object??? 
 	if (connections_[current_connection_].device_driver_) {
