@@ -638,9 +638,9 @@ void BluetoothController::queue_next_hci_command()
 void BluetoothController::handle_hci_command_status() 
 {
 	// <event type><param count><status><num packets allowed to be sent><CMD><CMD>
-#ifdef DEBUG_BT
 	uint16_t hci_command = rxbuf_[4] + (rxbuf_[5] << 8);
 	if (rxbuf_[2]) {
+		#ifdef DEBUG_BT
 		DBGPrintf("    Command %x Status %x - ", hci_command, rxbuf_[2]);
 		switch (rxbuf_[2]) {
 			case 0x01: DBGPrintf("Unknown HCI Command\n"); break;
@@ -660,10 +660,23 @@ void BluetoothController::handle_hci_command_status()
 			case 0x0F: DBGPrintf("Connection Rejected due to Unacceptable BD_ADDR\n"); break;
 			default: DBGPrintf("???\n"); break;
 		}
+		#endif
+		// lets try recovering from some errors...  
+		switch (hci_command) {
+			case HCI_OP_ACCEPT_CONN_REQ:
+				// We assume that the connection failed...
+				DBGPrintf("### Connection Failed ###");
+				if (count_connections_) count_connections_--;
+				break;
+			default:
+				break;
+		}
+
 	} else {
+		#ifdef DEBUG_BT
 		VDBGPrintf("    Command %x Status %x\n", hci_command, rxbuf_[2]);
+		#endif
 	}
-#endif
 }
 
 void BluetoothController::handle_hci_inquiry_result(bool fRSSI) 
