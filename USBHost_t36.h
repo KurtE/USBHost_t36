@@ -55,11 +55,75 @@
 // ABSOLUTELY MUST know the basic USB terminology from chapter 4.
 // Please repect other people's valuable time & effort by making
 // your best effort to read chapter 4 before asking USB questions!
-
-
 #define USBHOST_PRINT_DEBUG
+
 //#define USBHDBGSerial	Serial1
 
+#define USBHOST_DEGUG_MEMORY_STREAM
+#ifdef USBHOST_DEGUG_MEMORY_STREAM
+#if defined(ARDUINO_TEENSY41) && defined(USBHOST_PRINT_DEBUG)
+class DebugMemoryStream : public Stream {
+public: 
+	DebugMemoryStream(uint8_t *buffer, uint32_t size_buffer) : _buffer(buffer), _size_buffer(size_buffer) {}
+
+	// From Stream
+	virtual int available() {
+		if (_head <= _tail) return _tail - _head;
+		return (_size_buffer - _head) + _tail; 
+	}
+	virtual int read() {
+		if (_head == _tail) return -1;
+		int return_value = _buffer[_head++];
+		if (_head == _size_buffer) _head = 0;
+		return return_value;
+	}
+
+	virtual int peek() {
+		if (_head == _tail) return -1;
+		return _buffer[_head];
+	}
+
+	// From Print will use default except for one byte version
+	using Print::write; 
+	virtual size_t write(uint8_t b) {
+		if (!_enable_writes) return 0; // not writing now
+		uint32_t tail = _tail;
+		if (++tail == _size_buffer) tail = 0;
+		if (tail == _head) {
+			if (_stop_writes_on_overflow) return 0; // no room - if keep first received data
+			else if (++_head == _size_buffer) _head = 0;
+		}
+		_buffer[_tail] = b; 
+		_tail = tail; // 
+		return 1;
+	}
+
+	virtual int availableForWrite(void) {
+		return _size_buffer - available();
+	}
+
+	// other specific functions
+	void enable(bool enable_writes) {_enable_writes = enable_writes;}
+	void stopWritesOnOverflow(bool fStop) {_stop_writes_on_overflow = fStop;}
+	void clear() {_head = _tail = 0; }
+
+private:
+	uint8_t 	*_buffer;  // The buffer
+	uint32_t	_size_buffer;
+	uint32_t	_tail = 0;	// next plact to write to.
+	uint32_t	_head = 0;	// next place to read from. 
+	bool		_enable_writes = true;	// by default we are enabled
+	bool  		_stop_writes_on_overflow = false; // If we fill buffer to we keep the first bytes or overwrite those... 
+};
+
+extern DebugMemoryStream USBHostDebugStream;
+#define USBHDBGSerial  USBHostDebugStream
+
+
+#else
+#undef USBHOST_DEGUG_MEMORY_STREAM
+#endif
+#endif
 #ifndef USBHDBGSerial
 #define USBHDBGSerial	Serial
 #endif

@@ -17,7 +17,8 @@
 //
 // This example is in the public domain
 //=============================================================================
-//#define USE_ST77XX // define this if you wish to use one of these displays.
+#include <TeensyDebug.h>
+#define USE_ST77XX // define this if you wish to use one of these displays.
 
 #include "USBHost_t36.h"
 
@@ -71,8 +72,11 @@ USBHIDParser hid3(myusb);
 USBHIDParser hid4(myusb);
 USBHIDParser hid5(myusb);
 MouseController mouse(myusb);
-DigitizerController tablet(myusb);
 JoystickController joystick(myusb);
+#if defined(TEST_TABLET)
+DigitizerController tablet(myusb);
+#endif
+
 //BluetoothController bluet(myusb, true, "0000");   // Version does pairing to device
 BluetoothController bluet(myusb);   // version assumes it already was paired
 RawHIDController rawhid2(myusb);
@@ -88,17 +92,30 @@ const char * driver_names[CNT_DEVICES] = {"KB1", "KB2", "Joystick(device)", "Blu
 bool driver_active[CNT_DEVICES] = {false, false, false, false, false};
 
 // Lets also look at HID Input devices
+#if defined(TEST_TABLET)
 USBHIDInput *hiddrivers[] = {&tablet, &joystick, &mouse, &rawhid2};
 #define CNT_HIDDEVICES (sizeof(hiddrivers)/sizeof(hiddrivers[0]))
 const char * hid_driver_names[CNT_HIDDEVICES] = {"tablet", "joystick", "mouse", "RawHid2"};
-
 bool hid_driver_active[CNT_HIDDEVICES] = {false, false, false, false};
+#else
+USBHIDInput *hiddrivers[] = {&joystick, &mouse, &rawhid2};
+#define CNT_HIDDEVICES (sizeof(hiddrivers)/sizeof(hiddrivers[0]))
+const char * hid_driver_names[CNT_HIDDEVICES] = {"joystick", "mouse", "RawHid2"};
+bool hid_driver_active[CNT_HIDDEVICES] = {false, false, false};
+#endif
 
 BTHIDInput *bthiddrivers[] = {&joystick, &mouse};
 #define CNT_BTHIDDEVICES (sizeof(bthiddrivers)/sizeof(bthiddrivers[0]))
 const char * bthid_driver_names[CNT_HIDDEVICES] = {"joystick", "mouse"};
 bool bthid_driver_active[CNT_HIDDEVICES] = {false, false};
 
+//=============================================================================
+// DebugStream? 
+//=============================================================================
+#ifdef USBHOST_DEGUG_MEMORY_STREAM
+uint8_t debug_stream_buffer[2048*1024] EXTMEM;
+DebugMemoryStream USBHostDebugStream(debug_stream_buffer, sizeof(debug_stream_buffer));
+#endif
 //=============================================================================
 // Other state variables.
 //=============================================================================
@@ -140,6 +157,8 @@ void setup()
   Serial1.begin(2000000);
   while (!Serial && millis() < 3000) ; // wait for Arduino Serial Monitor
   Serial.println("\n\nUSB Host Testing");
+  // Debugger will use second USB Serial; this line is not need if using menu option
+//  debug.begin(SerialUSB1);
   myusb.begin();
   rawhid2.attachReceive(OnReceiveHidData);
   keyboard1.attachPress(OnPress);
@@ -163,8 +182,8 @@ void setup()
   //tft.initR(INITR_MINI160x80);  //if you're using a .96" TFT(160x80)
 
   // ST7789
-  tft.init(240, 240);           // initialize a ST7789 chip, 240x240 pixels
-  //tft.init(240, 320);           // Init ST7789 2.0" 320x240
+  //tft.init(240, 240);           // initialize a ST7789 chip, 240x240 pixels
+  tft.init(240, 320);           // Init ST7789 2.0" 320x240
   //tft.init(135, 240);             // Init ST7789 1.4" 135x240
   //tft.init(240, 240, SPI_MODE2);    // clones Init ST7789 240x240 no CS
 #else
@@ -189,14 +208,54 @@ void setup()
 //=============================================================================
 void loop()
 {
+    if (Serial.available()) {
+        int ch = Serial.read();
+        while (Serial.read() != -1); // get rid of 
+        switch (ch) {
+          case 'g':
+          case 'G':
+            #if defined(TEENSY_DEBUG_H)
+            if (debug.isGDBConnected()) {
+                Serial.println(F("Trying to break in to GDB"));
+                halt();
+                break;
+            }
+            #endif
+            Serial.println("GDB Not connected or enabled");
+            break;
+        #ifdef USBHOST_DEGUG_MEMORY_STREAM
+         case 'c':
+         case 'C':
+            USBHostDebugStream.clear();
+            break;            
+         case 'd':
+         case 'D':
+           Serial.println("\n *** dump the USBHost Debug data ***");
+           while ((ch = USBHostDebugStream.read()) != -1) Serial.write(ch);
+           break;
+         case 'f':
+         case 'F':
+            Serial.println("*** Save first received debug bytes ***");
+            USBHostDebugStream.stopWritesOnOverflow(true);
+            break;
+         case 'l':
+         case 'L':
+            Serial.println("*** Save last received debug bytes ***");
+            USBHostDebugStream.stopWritesOnOverflow(false);
+            break;
+          
+         #endif  
+        } 
+    }
   myusb.Task();
 
   // Update the display with
   UpdateActiveDeviceInfo();
 
   // Now lets try displaying Tablet data
+#if defined(TEST_TABLET)
   ProcessTabletData();
-
+#endif
   // And joystick data
   ProcessJoystickData();
 
@@ -296,6 +355,8 @@ void UpdateActiveDeviceInfo() {
 //=============================================================================
 // ProcessTabletData
 //=============================================================================
+
+#if defined(TEST_TABLET)
 void ProcessTabletData() {
   if (tablet.available()) {
     if (new_device_detected) {
@@ -366,6 +427,8 @@ void ProcessTabletData() {
     tablet.digitizerDataClear();
   }
 }
+#endif
+
 //=============================================================================
 // OutputNumberField
 //=============================================================================
@@ -418,7 +481,7 @@ void ProcessMouseData() {
       tft.setTextColor(WHITE, BLACK);
       //tft.setTextDatum(BR_DATUM);
       int16_t y = y_position_after_device_info;
-      tft.setCursor(TABLET_DATA_X, y);
+      tft.setCursor(MOUSE_DATA_X, y);
       tft.printf("%d(%x)", buttons_cur, buttons_cur);
       tft.getCursor(&x, &y2);
       tft.fillRect(x, y, 320, line_space, BLACK);
@@ -453,6 +516,8 @@ void ProcessJoystickData() {
         }
       }
     } else {
+      // BUGBUG:: lets limit to 16
+      axis_mask &=0xffff;
       for (uint8_t i = 0; axis_mask != 0; i++, axis_mask >>= 1) {
         if (axis_mask & 1) {
           Serial.printf(" %d:%d", i, joystick.getAxis(i));
@@ -503,10 +568,12 @@ void ProcessJoystickData() {
     if (buttons != buttons_cur) {
       if (joystick.joystickType() == JoystickController::PS3) {
         joystick.setLEDs((buttons >> 12) & 0xf); //  try to get to TRI/CIR/X/SQuare
+      } else if (joystick.joystickType() == JoystickController::SWITCH) {
+        joystick.setLEDs(buttons, 0, 0);
       } else {
-        uint8_t lr = (buttons & 1) ? 0xff : 0;
-        uint8_t lg = (buttons & 2) ? 0xff : 0;
-        uint8_t lb = (buttons & 4) ? 0xff : 0;
+        uint8_t lr = (buttons & 0x10) ? 0xff : 0;
+        uint8_t lg = (buttons & 0x20) ? 0xff : 0;
+        uint8_t lb = (buttons & 0x40) ? 0xff : 0;
         joystick.setLEDs(lr, lg, lb);
       }
       buttons_cur = buttons;
@@ -590,7 +657,7 @@ void tft_JoystickData() {
     tft.setTextColor(WHITE, BLACK);
     //tft.setTextDatum(BR_DATUM);
     int16_t y = y_position_after_device_info;
-    tft.setCursor(TABLET_DATA_X, y);
+    tft.setCursor(MOUSE_DATA_X, y);
     tft.printf("%d(%x)", buttons, buttons);
     tft.getCursor(&x, &y2);
     tft.fillRect(x, y, 320, line_space, BLACK);
@@ -623,6 +690,8 @@ void tft_JoystickData() {
 bool OnReceiveHidData(uint32_t usage, const uint8_t *data, uint32_t len) {
   // Called for maybe both HIDS for rawhid basic test.  One is for the Teensy
   // to output to Serial. while still having Raw Hid...
+
+#if defined(TEST_TABLET)
   if (usage == 0xFF000080
      ) {
     //Serial.print("RawHIDx data: ");
@@ -671,6 +740,7 @@ bool OnReceiveHidData(uint32_t usage, const uint8_t *data, uint32_t len) {
       //Serial.write(data, len);
     }
   }
+#endif
   return true;
 }
 
