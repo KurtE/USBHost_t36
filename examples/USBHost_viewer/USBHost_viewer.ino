@@ -110,12 +110,21 @@ const char * bthid_driver_names[CNT_HIDDEVICES] = {"joystick", "mouse"};
 bool bthid_driver_active[CNT_HIDDEVICES] = {false, false};
 
 //=============================================================================
-// DebugStream? 
+// DebugStream?
 //=============================================================================
 #ifdef USBHOST_DEGUG_MEMORY_STREAM
-uint8_t debug_stream_buffer[2048*1024] EXTMEM;
+#ifdef ARDUINO_TEENSY41
+uint8_t debug_stream_buffer[2048 * 1024] EXTMEM;
+extern "C"
+{
+  extern uint8_t external_psram_size;
+}
+#else
+uint8_t debug_stream_buffer[256 * 1024] DMAMEM;
+#endif
 DebugMemoryStream USBHostDebugStream(debug_stream_buffer, sizeof(debug_stream_buffer));
 #endif
+
 //=============================================================================
 // Other state variables.
 //=============================================================================
@@ -157,8 +166,26 @@ void setup()
   Serial1.begin(2000000);
   while (!Serial && millis() < 3000) ; // wait for Arduino Serial Monitor
   Serial.println("\n\nUSB Host Testing");
+
+#ifdef USBHOST_DEGUG_MEMORY_STREAM
+#ifdef ARDUINO_TEENSY41
+  if (external_psram_size == 0) {
+    uint8_t * debug_buffer = malloc(256 * 1024);
+    if (debug_buffer) {
+      Serial.println("\n*** USBHost Debug data - No external PSRAM using DMAMEM ***");
+      USBHostDebugStream.setBuffer(debug_buffer, 256 * 1024);
+    } else {
+      Serial.println("\n*** USBHost Debug data - No external PSRAM malloc failed ***");
+      USBHostDebugStream.setBuffer(debug_buffer, 0);
+      USBHostDebugStream.enable(false);
+
+    }
+  }
+#endif
+#endif
+
   // Debugger will use second USB Serial; this line is not need if using menu option
-//  debug.begin(SerialUSB1);
+  //  debug.begin(SerialUSB1);
   myusb.begin();
   rawhid2.attachReceive(OnReceiveHidData);
   keyboard1.attachPress(OnPress);
@@ -208,45 +235,45 @@ void setup()
 //=============================================================================
 void loop()
 {
-    if (Serial.available()) {
-        int ch = Serial.read();
-        while (Serial.read() != -1); // get rid of 
-        switch (ch) {
-          case 'g':
-          case 'G':
-            #if defined(TEENSY_DEBUG_H)
-            if (debug.isGDBConnected()) {
-                Serial.println(F("Trying to break in to GDB"));
-                halt();
-                break;
-            }
-            #endif
-            Serial.println("GDB Not connected or enabled");
-            break;
-        #ifdef USBHOST_DEGUG_MEMORY_STREAM
-         case 'c':
-         case 'C':
-            USBHostDebugStream.clear();
-            break;            
-         case 'd':
-         case 'D':
-           Serial.println("\n *** dump the USBHost Debug data ***");
-           while ((ch = USBHostDebugStream.read()) != -1) Serial.write(ch);
-           break;
-         case 'f':
-         case 'F':
-            Serial.println("*** Save first received debug bytes ***");
-            USBHostDebugStream.stopWritesOnOverflow(true);
-            break;
-         case 'l':
-         case 'L':
-            Serial.println("*** Save last received debug bytes ***");
-            USBHostDebugStream.stopWritesOnOverflow(false);
-            break;
-          
-         #endif  
-        } 
+  if (Serial.available()) {
+    int ch = Serial.read();
+    while (Serial.read() != -1); // get rid of
+    switch (ch) {
+      case 'g':
+      case 'G':
+#if defined(TEENSY_DEBUG_H)
+        if (debug.isGDBConnected()) {
+          Serial.println(F("Trying to break in to GDB"));
+          halt();
+          break;
+        }
+#endif
+        Serial.println("GDB Not connected or enabled");
+        break;
+#ifdef USBHOST_DEGUG_MEMORY_STREAM
+      case 'c':
+      case 'C':
+        USBHostDebugStream.clear();
+        break;
+      case 'd':
+      case 'D':
+        Serial.println("\n *** dump the USBHost Debug data ***");
+        while ((ch = USBHostDebugStream.read()) != -1) Serial.write(ch);
+        break;
+      case 'f':
+      case 'F':
+        Serial.println("*** Save first received debug bytes ***");
+        USBHostDebugStream.stopWritesOnOverflow(true);
+        break;
+      case 'l':
+      case 'L':
+        Serial.println("*** Save last received debug bytes ***");
+        USBHostDebugStream.stopWritesOnOverflow(false);
+        break;
+
+#endif
     }
+  }
   myusb.Task();
 
   // Update the display with
@@ -517,7 +544,7 @@ void ProcessJoystickData() {
       }
     } else {
       // BUGBUG:: lets limit to 16
-      axis_mask &=0xffff;
+      axis_mask &= 0xffff;
       for (uint8_t i = 0; axis_mask != 0; i++, axis_mask >>= 1) {
         if (axis_mask & 1) {
           Serial.printf(" %d:%d", i, joystick.getAxis(i));

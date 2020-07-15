@@ -57,10 +57,28 @@ bool first_joystick_message = true;
 uint8_t last_bdaddr[6] = {0, 0, 0, 0, 0, 0};
 
 // ps3 motion on USB does not do much, but see if we can pair it and maybe change
-// color of bulb... 
+// color of bulb...
 uint32_t PS3_MOTION_timer = 0;
 uint8_t  PS3_MOTION_tried_to_pair_state = 0;
 #define PS3_MOTION_PERIOD 2500 // not sure yet what would be good period for this..
+//=============================================================================
+// DebugStream?
+//=============================================================================
+//=============================================================================
+// DebugStream?
+//=============================================================================
+#ifdef USBHOST_DEGUG_MEMORY_STREAM
+#ifdef ARDUINO_TEENSY41
+uint8_t debug_stream_buffer[2048 * 1024] EXTMEM;
+extern "C"
+{
+  extern uint8_t external_psram_size;
+}
+#else
+uint8_t debug_stream_buffer[256 * 1024] DMAMEM;
+#endif
+DebugMemoryStream USBHostDebugStream(debug_stream_buffer, sizeof(debug_stream_buffer));
+#endif
 
 //=============================================================================
 // Setup
@@ -73,6 +91,25 @@ void setup()
 
   Serial.println("\n\nUSB Host Testing");
   Serial.println(sizeof(USBHub), DEC);
+#ifdef USBHOST_DEGUG_MEMORY_STREAM
+#ifdef ARDUINO_TEENSY41
+  if (external_psram_size == 0) {
+    uint8_t * debug_buffer = malloc(256 * 1024);
+    if (debug_buffer) {
+      Serial.println("\n*** USBHost Debug data - No external PSRAM using DMAMEM ***");
+      USBHostDebugStream.setBuffer(debug_buffer, 256 * 1024);
+    } else {
+      Serial.println("\n*** USBHost Debug data - No external PSRAM malloc failed ***");
+      USBHostDebugStream.setBuffer(debug_buffer, 0);
+      USBHostDebugStream.enable(false);
+
+    }
+  }
+#endif
+#endif
+
+
+  
   myusb.begin();
 
   delay(2000);
@@ -94,9 +131,22 @@ void loop()
     if ((ch == 'b') || (ch == 'B')) {
       Serial.println("Only notify on Basic Axis changes");
       joystick1.axisChangeNotifyMask(0x3ff);
-    } else if ((ch == 'f') || (ch == 'F')) {
+    } else if ((ch == 'a') || (ch == 'A')) {
       Serial.println("Only notify on Full Axis changes");
       joystick1.axisChangeNotifyMask(joystick_full_notify_mask);
+#ifdef USBHOST_DEGUG_MEMORY_STREAM
+    } else if ((ch == 'c') || (ch == 'C')) {
+      USBHostDebugStream.clear();
+    } else if ((ch == 'd') || (ch == 'D')) {
+      Serial.println("\n *** dump the USBHost Debug data ***");
+      while ((ch = USBHostDebugStream.read()) != -1) Serial.write(ch);
+    } else if ((ch == 'f') || (ch == 'F')) {
+      Serial.println("*** Save first received debug bytes ***");
+      USBHostDebugStream.stopWritesOnOverflow(true);
+    } else if ((ch == 'l') || (ch == 'L')) {
+      Serial.println("*** Save last received debug bytes ***");
+      USBHostDebugStream.stopWritesOnOverflow(false);
+#endif
 
     } else {
       if (show_changed_only) {
@@ -227,7 +277,7 @@ void UpdateActiveDeviceInfo() {
           if (joystick1.joystickType() == JoystickController::PS3_MOTION) {
             Serial.println("  PS3 Motion detected");
             PS3_MOTION_timer = millis();  // set time for last event
-            PS3_MOTION_tried_to_pair_state = 0; 
+            PS3_MOTION_tried_to_pair_state = 0;
           }
         }
 
@@ -264,7 +314,7 @@ void displayPS4Data()
   Serial.printf("LX: %d, LY: %d, RX: %d, RY: %d \r\n", psAxis[0], psAxis[1], psAxis[2], psAxis[5]);
   Serial.printf("L-Trig: %d, R-Trig: %d\r\n", psAxis[3], psAxis[4]);
   Serial.printf("Buttons: %x\r\n", buttons);
-  Serial.printf("Battery Status: %d\n", ((psAxis[30] & ((1 << 4) - 1))*10));
+  Serial.printf("Battery Status: %d\n", ((psAxis[30] & ((1 << 4) - 1)) * 10));
   printAngles();
   Serial.println();
 
@@ -280,28 +330,28 @@ void displayPS4Data()
     Serial.printf("Rumbling: %d, %d\r\n", ltv, rtv);
     joystick1.setRumble(ltv, rtv);
   }
-   
+
 
   if (buttons != buttons_prev) {
-      uint8_t lr = 0;
-      uint8_t lg = 0;
-      uint8_t lb = 0;
-      if(buttons == 0x10008){//Srq
-        lr = 0xff;
-      }
-      if(buttons == 0x40008){//Circ
-        lg = 0xff;
-      }
-      if(buttons == 0x80008){//Tri
-        lb = 0xff;
-      }
-      
-      Serial.print(buttons,HEX); Serial.print(", ");
-      Serial.print(lr); Serial.print(", "); 
-      Serial.print(lg); Serial.print(", "); 
-      Serial.println(lb); 
-      joystick1.setLEDs(lr, lg, lb);
-      buttons_prev = buttons;  
+    uint8_t lr = 0;
+    uint8_t lg = 0;
+    uint8_t lb = 0;
+    if (buttons == 0x10008) { //Srq
+      lr = 0xff;
+    }
+    if (buttons == 0x40008) { //Circ
+      lg = 0xff;
+    }
+    if (buttons == 0x80008) { //Tri
+      lb = 0xff;
+    }
+
+    Serial.print(buttons, HEX); Serial.print(", ");
+    Serial.print(lr); Serial.print(", ");
+    Serial.print(lg); Serial.print(", ");
+    Serial.println(lb);
+    joystick1.setLEDs(lr, lg, lb);
+    buttons_prev = buttons;
   }
 
 }
@@ -378,7 +428,7 @@ void displayPS3MotionData()
 {
   buttons = joystick1.getButtons();
 
-  // Hard to know what is best here. for now just copy raw data over... 
+  // Hard to know what is best here. for now just copy raw data over...
   // will do this for now... Format of thought to be data.
   //  data[1-3] Buttons (mentioned 4 as well but appears to be counter
   // axis[0-1] data[5] Trigger, Previous trigger value
@@ -388,7 +438,7 @@ void displayPS3MotionData()
   // 8-19 - Accel: XL, XH, YL, YH, ZL, ZH, XL2, XH2, YL2, YH2, ZL2, ZH2
   // 20-31 - Gyro: Xl,Xh,Yl,Yh,Zl,Zh,Xl2,Xh2,Yl2,Yh2,Zl2,Zh2
   // 32 - Temp High
-  // 33 - Temp Low (4 bits)  Maybe Magneto x High on other?? 
+  // 33 - Temp Low (4 bits)  Maybe Magneto x High on other??
 
   // Use Select button to choose raw or not
   if ((buttons & 0x01) && !(buttons_prev & 0x01)) show_raw_data = !show_raw_data;
@@ -413,9 +463,9 @@ void displayPS3MotionData()
   }
 
   if (buttons != buttons_prev) {
-    uint8_t ledsR = (buttons & 0x8000)? 0xff : 0;   //Srq
-    uint8_t ledsG = (buttons & 0x2000)? 0xff : 0;   //Cir
-    uint8_t ledsB = (buttons & 0x1000)? 0xff : 0;   //Tri
+    uint8_t ledsR = (buttons & 0x8000) ? 0xff : 0;  //Srq
+    uint8_t ledsG = (buttons & 0x2000) ? 0xff : 0;  //Cir
+    uint8_t ledsB = (buttons & 0x1000) ? 0xff : 0;  //Tri
     Serial.printf("Set Leds %x %x %x\r\n", ledsR, ledsG, ledsB );
     joystick1.setLEDs(ledsR, ledsG, ledsB);
     buttons_prev = buttons;
@@ -550,13 +600,13 @@ uint8_t PS3_MOTION_colors_index = 0;
 void processPS3MotionTimer() {
   // See if we have a PS3_MOTION connected and we have run for a certain amount of time
 
-  if (PS3_MOTION_timer && ((millis()-PS3_MOTION_timer) >= PS3_MOTION_PERIOD)) {
+  if (PS3_MOTION_timer && ((millis() - PS3_MOTION_timer) >= PS3_MOTION_PERIOD)) {
     Serial.println("PS3 Motion Timer"); Serial.flush();
     if (joystick1) {
       PS3_MOTION_timer = millis(); // joystick not there any more...
 
       // We will first try to set feedback color for the PS3, maybe alternate colors
-      if (++PS3_MOTION_colors_index >= sizeof(PS3_MOTION_colors)/sizeof(PS3_MOTION_colors[0])) PS3_MOTION_colors_index = 0;
+      if (++PS3_MOTION_colors_index >= sizeof(PS3_MOTION_colors) / sizeof(PS3_MOTION_colors[0])) PS3_MOTION_colors_index = 0;
       joystick1.setLEDs(PS3_MOTION_colors[PS3_MOTION_colors_index]);
 
       // Next see if we can try to pair.
@@ -566,7 +616,7 @@ void processPS3MotionTimer() {
           Serial.println(" - No Bluetooth adapter has been plugged in - so will not try to pair");
           PS3_MOTION_tried_to_pair_state = 1;
         }
-      } 
+      }
       if ((PS3_MOTION_tried_to_pair_state < 2)  &&
           (last_bdaddr[0] || last_bdaddr[1] || last_bdaddr[2] || last_bdaddr[3] || last_bdaddr[4] || last_bdaddr[5])) {
         Serial.println("  - Bluetooth device detected, will try to pair");

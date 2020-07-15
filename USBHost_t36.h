@@ -61,10 +61,15 @@
 
 #define USBHOST_DEGUG_MEMORY_STREAM
 #ifdef USBHOST_DEGUG_MEMORY_STREAM
-#if defined(ARDUINO_TEENSY41) && defined(USBHOST_PRINT_DEBUG)
+#if defined(__IMXRT1062__) && defined(USBHOST_PRINT_DEBUG)
 class DebugMemoryStream : public Stream {
 public: 
 	DebugMemoryStream(uint8_t *buffer, uint32_t size_buffer) : _buffer(buffer), _size_buffer(size_buffer) {}
+
+	void setBuffer(uint8_t *buffer, uint32_t size_buffer) {
+		_buffer = buffer;
+		_size_buffer = size_buffer;
+	}
 
 	// From Stream
 	virtual int available() {
