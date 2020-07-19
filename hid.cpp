@@ -316,6 +316,7 @@ void USBHIDParser::parse()
 		}
 		uint32_t val;
 		switch (tag & 0x03) { // Short Item data
+		default:
 		  case 0: val = 0;
 			p++;
 			break;
