@@ -15,8 +15,8 @@ USBHIDParser hid3(myusb);
 USBHIDParser hid4(myusb);
 USBHIDParser hid5(myusb);
 JoystickController joystick1(myusb);
-//BluetoothController bluet(myusb, true, "0000");   // Version does pairing to device
-BluetoothController bluet(myusb);   // version assumes it already was paired
+BluetoothController bluet(myusb, true, "0000");   // Version does pairing to device
+//BluetoothController bluet(myusb);   // version assumes it already was paired
 int user_axis[64];
 uint32_t buttons_prev = 0;
 uint32_t buttons;
@@ -94,7 +94,7 @@ void setup()
 #ifdef USBHOST_DEGUG_MEMORY_STREAM
 #ifdef ARDUINO_TEENSY41
   if (external_psram_size == 0) {
-    uint8_t * debug_buffer = malloc(256 * 1024);
+    uint8_t * debug_buffer = (uint8_t*)malloc(256 * 1024);
     if (debug_buffer) {
       Serial.println("\n*** USBHost Debug data - No external PSRAM using DMAMEM ***");
       USBHostDebugStream.setBuffer(debug_buffer, 256 * 1024);

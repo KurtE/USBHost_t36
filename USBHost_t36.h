@@ -1795,6 +1795,8 @@ public:
     uint16_t		interrupt_dcid_ = 0x71;
     uint16_t		interrupt_scid_;
     uint16_t		control_scid_;
+    uint16_t		sdp_scid_;
+    uint16_t		sdp_dcid_ =  0x50;  // not sure what this should be yet. 
 
     uint8_t			device_bdaddr_[6];// remember devices address
     uint8_t			device_ps_repetion_mode_ ; // mode
