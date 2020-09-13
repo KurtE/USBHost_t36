@@ -92,6 +92,7 @@ public:
 	using Print::write; 
 	virtual size_t write(uint8_t b) {
 		if (!_enable_writes) return 0; // not writing now
+		if (_bypass) return Serial.write(b);
 		uint32_t tail = _tail;
 		if (++tail == _size_buffer) tail = 0;
 		if (tail == _head) {
@@ -111,13 +112,15 @@ public:
 	void enable(bool enable_writes) {_enable_writes = enable_writes;}
 	void stopWritesOnOverflow(bool fStop) {_stop_writes_on_overflow = fStop;}
 	void clear() {_head = _tail = 0; }
-
+	void byPass(bool bypass=true) {_bypass = true;}
+	bool bypass() {return _bypass;}
 private:
 	uint8_t 	*_buffer;  // The buffer
 	uint32_t	_size_buffer;
 	uint32_t	_tail = 0;	// next plact to write to.
 	uint32_t	_head = 0;	// next place to read from. 
 	bool		_enable_writes = true;	// by default we are enabled
+	bool 		_bypass;
 	bool  		_stop_writes_on_overflow = false; // If we fill buffer to we keep the first bytes or overwrite those... 
 };
 
@@ -624,7 +627,7 @@ private:
 	BTHIDInput *next = NULL;
 	friend class BluetoothController;
 protected:
-	enum {SP_NEED_CONNECT=0x1, SP_DONT_NEED_CONNECT=0x02, SP_PS3_IDS=0x4};
+	enum {SP_NEED_CONNECT=0x1, SP_DONT_NEED_CONNECT=0x02, SP_PS3_IDS=0x4, SP_BT_SDP=0x08};
 	enum {REMOTE_NAME_SIZE=32};
 	uint8_t  special_process_required = 0;
 	Device_t *btdevice = NULL;
@@ -1872,6 +1875,13 @@ private:
 	void inline sendHCIWriteScanEnable(uint8_t scan_op);
 	void inline sendHCIHCIWriteInquiryMode(uint8_t inquiry_mode);
 	void inline sendHCISetEventMask();
+	void inline sendHCIIOCapReqReply();
+	void inline sendHCIUserCofirmReqReply();
+	void inline sendHCIWriteSSPMode();
+	void inline sendHCISetConnectionEncryption();
+	void inline sendHCIReadStoredLinkKey();
+	void inline sendHCIWriteStoredLinkKey(uint8_t *bdaddr, uint8_t *key);
+	void inline sendHCILinkKeyRequestReply(uint8_t *key);
 
 	void inline sendHCIRemoteNameRequest();
 	void inline sendHCIRemoteVersionInfoRequest();
@@ -1886,6 +1896,14 @@ private:
 	void handle_hci_authentication_complete();
 	void handle_hci_remote_name_complete();
 	void handle_hci_remote_version_information_complete();
+	void handle_hci_handle_num_complete();
+	void handle_hci_io_capability_request();
+	void handle_hci_io_capability_response();
+	void handle_hci_user_confirmation_request();
+	void handle_hci_simple_pairing_complete();
+	void handle_hci_encryption_change();
+	void handle_hci_return_link_key();
+
 	void handle_hci_pin_code_request();
 	void handle_hci_link_key_notification();
 	void handle_hci_link_key_request();
@@ -1926,7 +1944,7 @@ private:
 	uint8_t 		rx2buf_[64];	// receive buffer from Bulk end point
 	uint8_t			txbuf_[256];	// buffer to use to send commands to bluetooth 
 	uint8_t			hciVersion;		// what version of HCI do we have?
-
+	bool 			sdp_pairing_ = false;	// Are we doing Simple pairing?
 	bool 			do_pair_device_;	// Should we do a pair for a new device?
 	const char		*pair_pincode_;	// What pin code to use for the pairing
 	USBDriverTimer 	delayTimer_;
