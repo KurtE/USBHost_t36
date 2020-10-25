@@ -94,7 +94,7 @@ void loop()
     if ((ch == 'b') || (ch == 'B')) {
       Serial.println("Only notify on Basic Axis changes");
       joystick1.axisChangeNotifyMask(0x3ff);
-    } else if ((ch == 'f') || (ch == 'F')) {
+    } else if ((ch == 'a') || (ch == 'A')) {
       Serial.println("Only notify on Full Axis changes");
       joystick1.axisChangeNotifyMask(joystick_full_notify_mask);
 
@@ -263,8 +263,8 @@ void displayPS4Data()
   buttons = joystick1.getButtons();
   Serial.printf("LX: %d, LY: %d, RX: %d, RY: %d \r\n", psAxis[0], psAxis[1], psAxis[2], psAxis[5]);
   Serial.printf("L-Trig: %d, R-Trig: %d\r\n", psAxis[3], psAxis[4]);
-  Serial.printf("Buttons: %x\r\n", buttons);
-  Serial.printf("Battery Status: %d\n", ((psAxis[30] & ((1 << 4) - 1))*10));
+  Serial.printf("Buttons: %lx\r\n", buttons);
+  Serial.printf("Battery Status: %d\n", ((psAxis[30] & ((1 << 4) - 1)) * 10));
   printAngles();
   Serial.println();
 
@@ -286,17 +286,17 @@ void displayPS4Data()
       uint8_t lr = 0;
       uint8_t lg = 0;
       uint8_t lb = 0;
-      if(buttons == 0x10008){//Srq
+    if (buttons == 0x10008) { //Srq
         lr = 0xff;
       }
-      if(buttons == 0x40008){//Circ
+    if (buttons == 0x40008) { //Circ
         lg = 0xff;
       }
-      if(buttons == 0x80008){//Tri
+    if (buttons == 0x80008) { //Tri
         lb = 0xff;
       }
       
-      Serial.print(buttons,HEX); Serial.print(", ");
+    Serial.print(buttons, HEX); Serial.print(", ");
       Serial.print(lr); Serial.print(", "); 
       Serial.print(lg); Serial.print(", "); 
       Serial.println(lb); 
@@ -345,7 +345,7 @@ void displayPS3Data()
   } else {
     Serial.printf("LX: %d, LY: %d, RX: %d, RY: %d \r\n", psAxis[0], psAxis[1], psAxis[2], psAxis[5]);
     Serial.printf("L-Trig: %d, R-Trig: %d\r\n", psAxis[3], psAxis[4]);
-    Serial.printf("Buttons: %x\r\n", buttons);
+    Serial.printf("Buttons: %lx\r\n", buttons);
   }
   uint8_t ltv;
   uint8_t rtv;
@@ -398,7 +398,7 @@ void displayPS3MotionData()
     displayRawData();
   } else {
     uint64_t changed_mask = joystick1.axisChangedMask();
-    Serial.printf("Changed: %08x Buttons: %x: Trig: %d\r\n", (uint32_t)changed_mask, buttons, psAxis[0]);
+    Serial.printf("Changed: %08lx Buttons: %lx: Trig: %d\r\n", (uint32_t)changed_mask, buttons, psAxis[0]);
     Serial.printf("Battery Status: %d\n", psAxis[7]);
     printPS3MotionAngles();
     Serial.println();
@@ -413,9 +413,9 @@ void displayPS3MotionData()
   }
 
   if (buttons != buttons_prev) {
-    uint8_t ledsR = (buttons & 0x8000)? 0xff : 0;   //Srq
-    uint8_t ledsG = (buttons & 0x2000)? 0xff : 0;   //Cir
-    uint8_t ledsB = (buttons & 0x1000)? 0xff : 0;   //Tri
+    uint8_t ledsR = (buttons & 0x8000) ? 0xff : 0;  //Srq
+    uint8_t ledsG = (buttons & 0x2000) ? 0xff : 0;  //Cir
+    uint8_t ledsB = (buttons & 0x1000) ? 0xff : 0;  //Tri
     Serial.printf("Set Leds %x %x %x\r\n", ledsR, ledsG, ledsB );
     joystick1.setLEDs(ledsR, ledsG, ledsB);
     buttons_prev = buttons;
@@ -438,7 +438,7 @@ void displayXBoxData()
   } else {
     Serial.printf("LX: %d, LY: %d, RX: %d, RY: %d \r\n", psAxis[0], psAxis[1], psAxis[2], psAxis[5]);
     Serial.printf("L-Trig: %d, R-Trig: %d\r\n", psAxis[3], psAxis[4]);
-    Serial.printf("Buttons: %x\r\n", buttons);
+    Serial.printf("Buttons: %lx\r\n", buttons);
   }
   uint8_t ltv;
   uint8_t rtv;
@@ -478,7 +478,7 @@ void displayRawData() {
   if (show_changed_data) {
     if (!changed_mask) return;
     changed_mask &= 0xfffffffffL; // try reducing which ones show...
-    Serial.printf("%0x - ", joystick1.getButtons());
+    Serial.printf("%0lx - ", joystick1.getButtons());
 
     for (uint16_t index = 0; changed_mask; index++) {
       if (changed_mask & 1) {
@@ -489,7 +489,7 @@ void displayRawData() {
 
   } else {
     axis_mask &= 0xffffff;
-    Serial.printf("%06x%06x: %06x - ", (uint32_t)(changed_mask >> 32), (uint32_t)(changed_mask & 0xffffffff), joystick1.getButtons());
+    Serial.printf("%06lx%06lx: %06lx - ", (uint32_t)(changed_mask >> 32), (uint32_t)(changed_mask & 0xffffffff), joystick1.getButtons());
 
     for (uint16_t index = 0; axis_mask; index++) {
       Serial.printf("%02x ", psAxis[index]);
@@ -550,13 +550,13 @@ uint8_t PS3_MOTION_colors_index = 0;
 void processPS3MotionTimer() {
   // See if we have a PS3_MOTION connected and we have run for a certain amount of time
 
-  if (PS3_MOTION_timer && ((millis()-PS3_MOTION_timer) >= PS3_MOTION_PERIOD)) {
+  if (PS3_MOTION_timer && ((millis() - PS3_MOTION_timer) >= PS3_MOTION_PERIOD)) {
     Serial.println("PS3 Motion Timer"); Serial.flush();
     if (joystick1) {
       PS3_MOTION_timer = millis(); // joystick not there any more...
 
       // We will first try to set feedback color for the PS3, maybe alternate colors
-      if (++PS3_MOTION_colors_index >= sizeof(PS3_MOTION_colors)/sizeof(PS3_MOTION_colors[0])) PS3_MOTION_colors_index = 0;
+      if (++PS3_MOTION_colors_index >= sizeof(PS3_MOTION_colors) / sizeof(PS3_MOTION_colors[0])) PS3_MOTION_colors_index = 0;
       joystick1.setLEDs(PS3_MOTION_colors[PS3_MOTION_colors_index]);
 
       // Next see if we can try to pair.

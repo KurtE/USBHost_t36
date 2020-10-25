@@ -27,7 +27,7 @@
 #define print   USBHost::print_
 #define println USBHost::println_
 
-//#define DEBUG_JOYSTICK
+#define DEBUG_JOYSTICK
 #ifdef  DEBUG_JOYSTICK
 #define DBGPrintf USBHDBGSerial.printf
 #else
@@ -878,6 +878,9 @@ bool JoystickController::claim_bluetooth(BluetoothController *driver, uint32_t b
 		btdriver_ = driver;
 		btdevice = (Device_t*)driver;	// remember this way 
 		if (remoteName) mapNameToJoystickType(remoteName);
+		if (joystickType_ == XBOXONE) {
+			special_process_required = SP_BT_SDP;  // Setup to do simple pairing...
+		}
 		return true;
 	}
 
@@ -1134,6 +1137,7 @@ bool JoystickController::remoteNameComplete(const uint8_t *remoteName)
 			case PS4: special_process_required = SP_NEED_CONNECT; break;
 			case PS3: special_process_required = SP_PS3_IDS; break;
 			case PS3_MOTION: special_process_required = SP_PS3_IDS; break;
+			case XBOXONE: special_process_required = SP_BT_SDP; break;
 			default: 
 				break;
 		}
@@ -1183,7 +1187,7 @@ void JoystickController::release_bluetooth()
 	btdriver_ = nullptr;
 	connected_ = false;
 	special_process_required = false;
-
+	DBGPrintf("\n>>>>>>>>>> JoystickController::release_bluetooth <<<<<<<<<<\n");
 }
 
 

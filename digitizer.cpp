@@ -57,10 +57,10 @@ void DigitizerController::hid_input_begin(uint32_t topusage, uint32_t type, int 
 
 void DigitizerController::hid_input_data(uint32_t usage, int32_t value)
 {
-	USBHDBGSerial.printf("Digitizer: usage=%X, value=%d\n", usage, value);
+	USBHDBGSerial.printf("Digitizer: usage=%lX, value=%ld\n", usage, value);
 	uint32_t usage_page = usage >> 16;
 	usage &= 0xFFFF;
-	USBHDBGSerial.printf("Digitizer: &usage=%X, usage_page=%x\n", usage, usage_page);
+	USBHDBGSerial.printf("Digitizer: &usage=%lX, usage_page=%lx\n", usage, usage_page);
 	
 	// This is Mikes version...
 	if (usage_page == 0xff00 && usage >= 100 && usage <= 0x108) {
