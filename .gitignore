@@ -16,3 +16,6 @@
 *.xml
 *.sln
 *.buildinfo
+*.sublime-project
+*.sublime-workspace
+examples/MTPDeviceInfo/Compile.cmd
