@@ -1771,9 +1771,9 @@ private:
 
 //--------------------------------------------------------------------------
 
-class SerEMUController : public USBHIDInput, public Stream {
+class USBSerialEmu : public USBHIDInput, public Stream {
 public:
-	SerEMUController(USBHost &host) { init(); }
+	USBSerialEmu(USBHost &host) { init(); }
 	uint32_t usage(void) {return usage_;}
 
 	// Stream stuff. 

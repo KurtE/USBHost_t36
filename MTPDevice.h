@@ -25,13 +25,14 @@
 #define USB_HOST_MTPDEVICE_H_
 
 #include "USBHost_t36.h"
+#include "utility/MTPDefines.h"
 
 //--------------------------------------------------------------------------
 class MTPDevice : public USBDriver {
 public:
 	MTPDevice(USBHost &host) { init(); }
 	MTPDevice(USBHost *host) { init(); }
-	enum {MAX_STORAGES=10, MAX_OBJECT_FORMATS=5, MAX_OBJECT_PROPERTY_IDS=15};
+	enum {MAX_STORAGES=10, MAX_OBJECT_FORMATS=5, MAX_OBJECT_PROPERTY_IDS=15, MAX_PENDING_EVENTS=10};
 
 	// need their own versions as both USBDriver and USBHIDInput provide
 	uint16_t idVendor();
@@ -68,6 +69,15 @@ public:
 		uint8_t					*volume_id;
 	} storage_info_t;
 
+	typedef struct {
+		uint32_t				event;		// which type of event;
+		uint32_t				id;			// id of object;
+		uint32_t				prop_code;	// if event has other data. 
+		storage_list_t			*item_node;	// pointer to item may be null at times.
+		bool 					delete_node; // need to delete after notify...
+	} event_data_t;		
+
+	typedef void (*eventCompleteCB_t) (const event_data_t *pevent);
 
 	const storage_info_t *getStorageInfo(uint8_t index) {
 		if (index >= cnt_storages_) return nullptr;
@@ -79,8 +89,11 @@ public:
 	
 	void startEnumStorageNode(const storage_list_t *node);
 	bool enumComplete() {return enum_node_ == nullptr;}
-	void printNodeListItem(storage_list_t *item, uint8_t level);
+	void printNodeListItem(storage_list_t *item, uint8_t level=0);
 	void printNodeList() ;
+	
+	uint32_t deleteObject(uint32_t id, uint32_t format=0, uint32_t timeoutMS=1000);
+	void setEventCompleteCB(eventCompleteCB_t pcb) {peventCompeteCB_ = pcb;}
 
 protected:
 	virtual bool claim(Device_t *device, int type, const uint8_t *descriptors, uint32_t len);
@@ -130,6 +143,11 @@ protected:
   void processObjectPropDesc(MTPContainer *c);
   void processGetObjectHandles(MTPContainer *c);
   void processGetObjectPropValue(MTPContainer *c);
+  
+  void start_process_next_event();
+  void complete_processing_event(bool start_next_event);
+  bool process_object_added_event(uint32_t event_index);
+  bool process_object_removed_event(uint32_t event_index);
 
 
   uint8_t read8(const uint8_t **pdata);
@@ -173,10 +191,17 @@ private:
 	uint8_t			cnt_object_property_ids_ = 0;
 	uint16_t		object_property_ids_[MAX_OBJECT_PROPERTY_IDS];
 	bool 			setup_complete_ = false;
-	storage_list_t	*enum_node_ = nullptr;
+	volatile storage_list_t	*enum_node_ = nullptr;
 
 	storage_list_t	*prop_node_ = nullptr;
-	uint8_t			prop_index_ = 0;
+	volatile uint8_t			prop_index_ = 0;
+	volatile uint32_t	last_response_ = 0;
+	event_data_t		pending_events_[MAX_PENDING_EVENTS];
+	volatile uint32_t	pending_events_head_ = 0;
+	volatile uint32_t	pending_events_tail_ = 0;
+	volatile bool 		pending_events_active_ = false;
+
+	eventCompleteCB_t	peventCompeteCB_ = nullptr;
 
 };
 

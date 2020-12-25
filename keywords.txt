@@ -9,12 +9,12 @@ MIDIDevice	KEYWORD1
 MIDIDevice_BigBuffer	KEYWORD1
 USBSerial	KEYWORD1
 USBSerial_BigBuffer	KEYWORD1
+USBSerialEmu	KEYWORD1
 USBSerialBase	KEYWORD1
 AntPlus	KEYWORD1
 JoystickController	KEYWORD1
 MTPDevice	KEYWORD1
 RawHIDController	KEYWORD1
-SerEMUController	KEYWORD1
 BluetoothController	KEYWORD1
 # Common Functions
 Task	KEYWORD2

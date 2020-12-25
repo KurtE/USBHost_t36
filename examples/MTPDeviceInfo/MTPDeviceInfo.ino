@@ -33,7 +33,7 @@ USBHIDParser hid1(myusb);
 USBHIDParser hid2(myusb);
 MTPDevice mtpd(myusb);
 USBSerial_BigBuffer userial(myusb, 1);  // USB Serial  big or little... 
-SerEMUController seremu(myusb);
+USBSerialEmu seremu(myusb);
 
 
 USBDriver *drivers[] = {&hub1, &mtpd, &hid1, &hid2, &userial};
@@ -59,6 +59,7 @@ void setup()
   Serial.println("\n\nUSB MTP Device Test Program");
 
   myusb.begin();
+  mtpd.setEventCompleteCB(&mtpd_event_callback);
 
 }
 
@@ -145,7 +146,7 @@ void loop()
           const MTPDevice::storage_list_t * storage_list_item = mtpd.findStorageItemByID(id);
           if (storage_list_item) {
             if (storage_list_item->format == 0x3001) {
-              Serial.printf("/n/ ================= Start ENUM(%u:%s) =================\n", storage_list_item->id, storage_list_item->name);
+              Serial.printf("\n\n ================= Start ENUM(%u:%s) =================\n", storage_list_item->id, storage_list_item->name);
               mtpd.startEnumStorageNode(storage_list_item);
               enum_storage_list_item = storage_list_item; // remember this one
             } else {
@@ -158,11 +159,20 @@ void loop()
           }
         }
         break;
+      case 'R':
+          uint32_t mtp_resp;
+          if ((mtp_resp = mtpd.deleteObject(id, 0, 1000)) == MTP_RESPONSE_OK) {
+            Serial.printf("Delete of object: %x successful\n", id);
+          } else {
+            Serial.printf("Delete of object: %x failed status code: %x\n", id, mtp_resp);
+          }
+        break;  
       default: 
         Serial.println("\n---------- Commands ----------");
         Serial.println("  s - Show storage list");
         Serial.println("  e - enum <ID>");
         Serial.println("  d - dump storage list");
+        Serial.println("  R - Remove <ID> ");
         break;
     }
 
@@ -170,6 +180,32 @@ void loop()
   }
 
 }
+
+void mtpd_event_callback (const MTPDevice::event_data_t *pevent) {
+  MTPDevice::storage_list_t *node = pevent->item_node;
+  if (node) Serial.printf("mtpd_event_callback %x %x %x : %x %x %x\n ", pevent->event, pevent->id, (uint32_t)node,
+        (uint32_t)node->next, (uint32_t)node->child, (uint32_t)node->parent);
+  else Serial.printf("mtpd_event_callback %x %x - no node\n", pevent->event, pevent->id);
+  switch (pevent->event) {
+  case  MTP_EVENT_OBJECT_ADDED:
+    Serial.printf("CALLBACK: Object added: ");
+    mtpd.printNodeListItem(node, 0);
+    break;
+  case  MTP_EVENT_OBJECT_REMOVED:
+    Serial.printf("CALLBACK: Object removed: ");
+    if (!pevent->item_node)
+    mtpd.printNodeListItem(node, 0);
+    break;
+  case  MTP_EVENT_STORAGE_INFO_CHANGED:
+    Serial.printf("CALLBACK: Storage Changed: %x\n", pevent->id);
+    break;
+  default:
+    break;  
+  }
+}
+
+
+
 
 void ShowStorageList() {
     Serial.printf("\n*** MPT connected ***\nConnected to:%s\n", mtpd.DeviceFriendlyName());
