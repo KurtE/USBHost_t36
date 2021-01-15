@@ -26,6 +26,7 @@
 
 #include "USBHost_t36.h"
 #include "utility/MTPDefines.h"
+#include <FS.h>
 
 //--------------------------------------------------------------------------
 class MTPDevice : public USBDriver {
@@ -56,6 +57,7 @@ public:
 		struct storage_list_  	*child;	// first child ID;
 		uint8_t					*name;	// the name the node
 		uint32_t				storage_id; // Storage ID.  
+		uint8_t					modify_date[20]; // modify date... 
 	} storage_list_t;	
 
 	typedef struct {
@@ -94,6 +96,9 @@ public:
 	
 	uint32_t deleteObject(uint32_t id, uint32_t format=0, uint32_t timeoutMS=1000);
 	void setEventCompleteCB(eventCompleteCB_t pcb) {peventCompeteCB_ = pcb;}
+
+  	void sendFileObject(uint32_t storage, uint32_t parent, const char *name, File &file);
+  	void sendObjectMsg(uint32_t storage, uint32_t parent, uint32_t object_id);
 
 protected:
 	virtual bool claim(Device_t *device, int type, const uint8_t *descriptors, uint32_t len);
@@ -144,6 +149,7 @@ protected:
   void processGetObjectHandles(MTPContainer *c);
   void processGetObjectPropValue(MTPContainer *c);
   
+  void add_event_to_list(uint16_t op, uint32_t id, uint32_t prop_code=0);
   void start_process_next_event();
   void complete_processing_event(bool start_next_event);
   bool process_object_added_event(uint32_t event_index);
@@ -156,11 +162,17 @@ protected:
   uint64_t read64(const uint8_t **pdata);
   void readStr(uint8_t *str, const uint8_t **pdata);
   uint8_t *readAndAllocStr(const uint8_t **pdata);
+  void write8(uint8_t val, uint8_t **pdata);
+  void write16(uint16_t val, uint8_t **pdata); 
+  void write32(uint32_t val, uint8_t **pdata);
+  void write64(uint64_t val, uint8_t **pdata);
+  void writeStr(const char *str, uint8_t **pdata);
 
 
   uint32_t transaction_id_ = 0;
   uint32_t session_id_ = 0;
   uint16_t last_mtp_op_ = 0;
+
 
 private:
 	Pipe_t mypipes[4] __attribute__ ((aligned(32)));
@@ -176,6 +188,7 @@ private:
 	uint16_t event_size_ = 0;
 
 	uint8_t txbuffer[512];
+	uint8_t txbuffer2[512];
 	uint8_t rx1[512];
 	uint8_t rx2[512];
 	uint8_t rxevent[64];	// make sure 
@@ -202,7 +215,10 @@ private:
 	volatile bool 		pending_events_active_ = false;
 
 	eventCompleteCB_t	peventCompeteCB_ = nullptr;
-
+	char 				*send_file_buffer_ = nullptr;
+	char				*send_file_buffer_ptr_ = nullptr;  	
+  	uint32_t			send_file_count_left_ = 0;
+  	uint32_t			send_file_object_id_ = 0;
 };
 
 #endif //USB_HOST_MTPDEVICE_H_

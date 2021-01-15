@@ -28,7 +28,7 @@
 #define print   USBHost::print_
 #define println USBHost::println_
 
-//#define DEBUG_MTP
+#define DEBUG_MTP
 //#define DEBUG_MTP_VERBOSE
 
 #ifndef DEBUG_MTP
@@ -203,14 +203,14 @@ void MTPDevice::disconnect()
   // Free up any old items that were not reused...
   // May need to recurse if these have children?
   for (uint8_t i = 0; i < cnt_storages_; i++) {
-    if (storage_info_[i].storage.name) {free(storage_info_[i].storage.name); storage_info_[i].storage.name = nullptr;}
-    if (storage_info_[i].volume_id) {free(storage_info_[i].volume_id); storage_info_[i].volume_id = nullptr;}
+    if (storage_info_[i].storage.name) {extmem_free(storage_info_[i].storage.name); storage_info_[i].storage.name = nullptr;}
+    if (storage_info_[i].volume_id) {extmem_free(storage_info_[i].volume_id); storage_info_[i].volume_id = nullptr;}
     freeStorageListTree(storage_info_[i].storage.child);
     storage_info_[i].storage.child = nullptr; // make sure to only do once.
   }
 
   if (device_friendly_name_) {
-    free(device_friendly_name_);
+    extmem_free(device_friendly_name_);
     device_friendly_name_ = nullptr;
   }
 
@@ -231,8 +231,8 @@ void MTPDevice::printNodeListItem(storage_list_t *item, uint8_t level) {
   while (item) {
     Serial.printf("%08x ", (uint32_t)item);
     for (uint8_t i = 0; i < level; i++) Serial.printf("  ");
-    Serial.printf("ID:%08x P:%04x C:%04x: S:%08x F:%04x %s\n", item->id, item->parent, item->child,
-                  item->storage_id, item->format, item->name);
+    Serial.printf("ID:%08x P:%04x C:%04x: S:%08x F:%04x MD: %s %s\n", item->id, item->parent, item->child,
+                  item->storage_id, item->format, (uint8_t*)item->modify_date, item->name);
     if (item->child) printNodeListItem(item->child, level + 1);
     item = item->next;
   }
@@ -250,8 +250,8 @@ void MTPDevice::freeStorageListTree(storage_list_t *item) {
     storage_list_t *next = item->next;
     // This recurses will unwind one direction of the recursing.
     if (item->child) freeStorageListTree(item->child);
-    if (item->name) free(item->name);
-    free(item);
+    if (item->name) extmem_free(item->name);
+    extmem_free(item);
     item = next;
   }
 }
@@ -370,17 +370,112 @@ void MTPDevice::sendMsg(uint16_t operation, uint32_t p1, uint32_t p2, uint32_t p
   last_mtp_op_ = operation;
 }
 
+void MTPDevice::sendFileObject(uint32_t storage, uint32_t parent, const char *name, File &file) {
+  // 
+  send_file_count_left_ = file.size();
+  send_file_buffer_ptr_ = nullptr; // not ready yet
+  if (send_file_buffer_) extmem_free(send_file_buffer_); // free previous if we have one
+
+  send_file_buffer_ = (char*)extmem_malloc(send_file_count_left_);
+  
+  // quick and dirty read file into buffer.
+  if (!send_file_buffer_) {
+    // failed to allocate buffer. 
+    Serial.printf("MTPDevice::sendFileObject failed to allocate buffer size: %u\n", send_file_count_left_);
+    return;
+  }
+  file.read(send_file_buffer_, send_file_count_left_);
+  file.close();
+
+  ++transaction_id_;
+  sendMsg(MTP_OPERATION_SEND_OBJECT_INFO, storage, parent);
+
+  MTPHeader *c = (MTPHeader *)txbuffer2;
+  uint8_t * pdata = (uint8_t*)c + sizeof(MTPHeader);
+
+  c->type = MTP_CONTAINER_TYPE_DATA;
+  c->op = MTP_OPERATION_SEND_OBJECT_INFO;
+  c->transaction_id = transaction_id_;
+
+  write32(storage, &pdata); // storage
+  write16(0x3000, &pdata); // format
+  write16(0x0000, &pdata); // protection
+  write32(send_file_count_left_, &pdata);  // size
+  write16(0x0000,&pdata);  // thumb format
+  write32(0x0000,&pdata);  // thumb size
+  write32(0x0000,&pdata);  // thumb width
+  write32(0x0000,&pdata);  // thumb height
+  write32(0x0000,&pdata);  // pix width
+  write32(0x0000,&pdata);  // pix height
+  write32(0x0000,&pdata);  // bit depth
+  write32(parent,&pdata);  // parent
+  write16(0x0000,&pdata);  // association type
+  write32(0x0000,&pdata);  // association description
+  write32(0x0000,&pdata);  // sequence number
+  writeStr(name, &pdata);  // object name
+  writeStr("", &pdata);    // date Created
+  writeStr("", &pdata);    // date modified
+  writeStr("", &pdata);    // Keywords
+  c->len = (uint32_t)pdata - (uint32_t)c;
+
+  queue_Data_Transfer(txpipe_, txbuffer2, c->len, this);
+#if defined(DEBUG_MTP)
+  printContainer((MTPContainer *)c, "d-> ");
+  print_hexbytes(txbuffer2, c->len);
+
+#endif
+
+}
+
+void MTPDevice::sendObjectMsg(uint32_t storage, uint32_t parent, uint32_t object_id)
+{
+
+  if (!send_file_buffer_) {
+    println("MTPDevice::sendObjectMsg called with no buffer active");
+    return;
+  }
+
+  ++transaction_id_;
+
+  MTPHeader *c = (MTPHeader *)txbuffer2;
+  uint8_t * pdata = (uint8_t*)c + sizeof(MTPHeader);
+
+  c->type = MTP_CONTAINER_TYPE_DATA;
+  c->op = MTP_OPERATION_SEND_OBJECT;
+  c->transaction_id = transaction_id_;
+  c->len = send_file_count_left_ + sizeof(MTPHeader);
+
+  // now read in the first N bytes of the file.
+  uint16_t cb_read = min (send_file_count_left_, tx_size_ - sizeof(MTPHeader));
+  send_file_object_id_ = object_id; // not ready yet
+
+  Serial.printf("sendObjectMsg %x\n", object_id); Serial.flush();
+
+  send_file_buffer_ptr_ = send_file_buffer_; // setup pointer to first chunk of file
+  memcpy(pdata, send_file_buffer_ptr_, cb_read);
+  send_file_buffer_ptr_ += cb_read; // setup pointer to first chunk o file
+  send_file_count_left_ -= cb_read;  // probably should check how many were actually read...
+  if (send_file_count_left_ == 0) {
+    extmem_free(send_file_buffer_);
+    send_file_buffer_ = nullptr;
+    send_file_buffer_ptr_ = nullptr; 
+  }
+  sendMsg(MTP_OPERATION_SEND_OBJECT);
+  Serial.flush();
+  queue_Data_Transfer(txpipe_, txbuffer2, cb_read + sizeof(MTPHeader), this);
+}
+
 void MTPDevice::printContainer(MTPContainer *c, const char *msg) {
   if (msg) Serial.printf("%s", msg);
-  print("len:", c->len);
+  int print_property_name = -1;  //no
   switch (c->type) {
   default: print(" UNKWN:", c->type, HEX); break;
-  case MTP_CONTAINER_TYPE_COMMAND: Serial.printf(F(" CMD: ")); break;
-  case MTP_CONTAINER_TYPE_DATA: Serial.printf(F(" DATA:")); break;
-  case MTP_CONTAINER_TYPE_RESPONSE: Serial.printf(F(" RESP:")); break;
-  case MTP_CONTAINER_TYPE_EVENT: Serial.printf(F(" EVENT: ")); break;
+  case MTP_CONTAINER_TYPE_COMMAND: Serial.printf(F("CMD: ")); break;
+  case MTP_CONTAINER_TYPE_DATA: Serial.printf(F("DATA:")); break;
+  case MTP_CONTAINER_TYPE_RESPONSE: Serial.printf(F("RESP:")); break;
+  case MTP_CONTAINER_TYPE_EVENT: Serial.printf(F("EVENT: ")); break;
   }
-  Serial.printf(F(" OP:%x"), c->op);
+  Serial.printf(F("%x"), c->op);
   switch (c->op) {
   case MTP_OPERATION_GET_DEVICE_INFO: Serial.printf(F("(GET_DEVICE_INFO)")); break;
   case MTP_OPERATION_OPEN_SESSION: Serial.printf(F("(OPEN_SESSION)")); break;
@@ -411,8 +506,8 @@ void MTPDevice::printContainer(MTPContainer *c, const char *msg) {
   case MTP_OPERATION_GET_PARTIAL_OBJECT: Serial.printf(F("(GET_PARTIAL_OBJECT)")); break;
   case MTP_OPERATION_INITIATE_OPEN_CAPTURE: Serial.printf(F("(INITIATE_OPEN_CAPTURE)")); break;
   case MTP_OPERATION_GET_OBJECT_PROPS_SUPPORTED: Serial.printf(F("(GET_OBJECT_PROPS_SUPPORTED)")); break;
-  case MTP_OPERATION_GET_OBJECT_PROP_DESC: Serial.printf(F("(GET_OBJECT_PROP_DESC)")); break;
-  case MTP_OPERATION_GET_OBJECT_PROP_VALUE: Serial.printf(F("(GET_OBJECT_PROP_VALUE)")); break;
+  case MTP_OPERATION_GET_OBJECT_PROP_DESC: Serial.printf(F("(GET_OBJECT_PROP_DESC)")); print_property_name = 0; break;
+  case MTP_OPERATION_GET_OBJECT_PROP_VALUE: Serial.printf(F("(GET_OBJECT_PROP_VALUE)")); print_property_name = 1; break;
   case MTP_OPERATION_SET_OBJECT_PROP_VALUE: Serial.printf(F("(SET_OBJECT_PROP_VALUE)")); break;
   case MTP_OPERATION_GET_OBJECT_PROP_LIST: Serial.printf(F("(GET_OBJECT_PROP_LIST)")); break;
   case MTP_OPERATION_SET_OBJECT_PROP_LIST: Serial.printf(F("(SET_OBJECT_PROP_LIST)")); break;
@@ -483,18 +578,31 @@ void MTPDevice::printContainer(MTPContainer *c, const char *msg) {
   case  MTP_EVENT_OBJECT_PROP_CHANGED: Serial.printf(F("(EVT:OBJECT_PROP_CHANGED)")); break;
   case  MTP_EVENT_OBJECT_PROP_DESC_CHANGED: Serial.printf(F("(EVT:OBJECT_PROP_DESC_CHANGED)")); break;
   case  MTP_EVENT_OBJECT_REFERENCES_CHANGED: Serial.printf(F("(EVT:OBJECT_REFERENCES_CHANGED)")); break;
-
-
   }
-  Serial.printf(F(" TID:%x"), c->transaction_id);
+  print("l:", c->len);
+
+  Serial.printf(F(" T:%x"), c->transaction_id);
   if (c->len >= 16) Serial.printf(F(" P:%x"), c->params[0]);
   if (c->len >= 20) Serial.printf(F(" %x"), c->params[1]);
   if (c->len >= 24) Serial.printf(F(" %x"), c->params[2]);
   if (c->len >= 28) Serial.printf(F(" %x"), c->params[3]);
   if (c->len >= 32) Serial.printf(F(" %x"), c->params[4]);
+  if (print_property_name >= 0) {
+    switch (c->params[print_property_name]) {
+      case MTP_PROPERTY_STORAGE_ID:  Serial.printf(" (STORAGE_ID)"); break;
+      case MTP_PROPERTY_OBJECT_FORMAT:  Serial.printf(" (FORMAT)"); break;
+      case MTP_PROPERTY_PROTECTION_STATUS:  Serial.printf(" (PROTECTION)"); break;
+      case MTP_PROPERTY_OBJECT_SIZE:  Serial.printf(" (SIZE)"); break;
+      case MTP_PROPERTY_OBJECT_FILE_NAME:  Serial.printf(" (OBJECT NAME)"); break;
+      case MTP_PROPERTY_DATE_CREATED:  Serial.printf(" (CREATED)"); break;
+      case MTP_PROPERTY_DATE_MODIFIED:  Serial.printf(" (MODIFIED)"); break;
+      case MTP_PROPERTY_PARENT_OBJECT:  Serial.printf(" (PARENT)"); break;
+      case MTP_PROPERTY_PERSISTENT_UID:  Serial.printf(" (PERSISTENT_UID)"); break;
+      case MTP_PROPERTY_NAME:  Serial.printf(" (NAME)"); break;
+    }
+  }
   Serial.printf("\n");
 }
-
 
 /************************************************************/
 //  Interrupt-based Data Movement
@@ -558,7 +666,7 @@ void MTPDevice::rx_data(const Transfer_t *transfer)
 //=============================================================================
 bool MTPDevice::process_object_added_event(uint32_t event_index) {
 
-  prop_node_ = (storage_list_t *)malloc(sizeof(storage_list_t));
+  prop_node_ = (storage_list_t *)extmem_malloc(sizeof(storage_list_t));
 
   if (!prop_node_) {
     DBGPrintf("Failed to allocate new item for added event\n");
@@ -673,38 +781,66 @@ void MTPDevice::event_data(const Transfer_t *transfer)
     }
     // Lets see if we have room in our pending event list.
     if (id) {
-      uint32_t head = pending_events_head_;
-      uint32_t next_pending_event_head = head + 1;
-      if (next_pending_event_head == MAX_PENDING_EVENTS) next_pending_event_head = 0;
-
-      if (next_pending_event_head != pending_events_tail_) {
-        // we have room.
-        pending_events_[head].event = c->op;
-        pending_events_[head].id = id;
-        pending_events_[head].prop_code = prop_code;
-        pending_events_[head].item_node = nullptr;
-        pending_events_[head].delete_node = false;
-        pending_events_head_ = next_pending_event_head;
-        if (head == pending_events_tail_) start_process_next_event();
-
-      } else {
-        DBGPrintf(">>>>> Unprocessed Event queue is full");
-      }
+      add_event_to_list(c->op, id, prop_code);
     }
   }
   queue_Data_Transfer(eventpipe_, rxevent, event_size_, this);
+}
+
+
+void MTPDevice::add_event_to_list(uint16_t op, uint32_t id, uint32_t prop_code=0)
+{
+  uint32_t head = pending_events_head_;
+  uint32_t next_pending_event_head = head + 1;
+  if (next_pending_event_head == MAX_PENDING_EVENTS) next_pending_event_head = 0;
+
+  if (next_pending_event_head != pending_events_tail_) {
+    // we have room.
+    pending_events_[head].event = op;
+    pending_events_[head].id = id;
+    pending_events_[head].prop_code = prop_code;
+    pending_events_[head].item_node = nullptr;
+    pending_events_[head].delete_node = false;
+    pending_events_head_ = next_pending_event_head;
+    if (head == pending_events_tail_) start_process_next_event();
+
+  } else {
+    DBGPrintf(">>>>> Unprocessed Event queue is full");
+  }
+
 }
 
 //=============================================================================
 
 void MTPDevice::tx_data(const Transfer_t *transfer)
 {
+  uint8_t *p = (uint8_t *)transfer->buffer;
+
 #if defined(DEBUG_MTP_VERBOSE)
   uint32_t len = transfer->length - ((transfer->qtd.token >> 16) & 0x7FFF);
-  uint8_t *p = (uint8_t *)transfer->buffer;
   println("tx_data - length: ", len);
   if (len) print_hexbytes(p, len);
 #endif
+
+  // if we are in the process of tranfer, we may need to 
+  // now read in the first N bytes of the file
+ 
+  if (send_file_buffer_ptr_ && send_file_count_left_) {
+    uint16_t cb_read = min (send_file_count_left_, tx_size_);
+    Serial.printf("T");
+
+    memcpy(p, send_file_buffer_ptr_, cb_read);
+    send_file_buffer_ptr_ += cb_read; // setup pointer to first chunk o file
+    send_file_count_left_ -= cb_read;  // probably should check how many were actually read...
+    if (send_file_count_left_ == 0) {
+      extmem_free(send_file_buffer_);
+      send_file_buffer_ = nullptr;
+      send_file_buffer_ptr_ = nullptr;
+      Serial.printf("\n");
+    }
+    queue_Data_Transfer(txpipe_, p, cb_read, this);
+  }
+  
 }
 
 
@@ -769,7 +905,7 @@ uint8_t *MTPDevice::readAndAllocStr(const uint8_t **pdata)
   const uint8_t *p = *pdata;
   uint8_t str_len = *p++;
 
-  uint8_t *pstr = (uint8_t*)malloc(str_len + 1);
+  uint8_t *pstr = (uint8_t*)extmem_malloc(str_len + 1);
   if (!pstr) return nullptr;
 
   uint8_t *palloc = pstr;
@@ -782,6 +918,49 @@ uint8_t *MTPDevice::readAndAllocStr(const uint8_t **pdata)
   *pstr = 0; // null terminate the string.
   return palloc;
 }
+
+void MTPDevice::write8(uint8_t val, uint8_t **pdata) {
+  uint8_t *p = *pdata;
+  *pdata = p;
+}
+void MTPDevice::write16(uint16_t val, uint8_t **pdata) {
+  uint16_t *p = (uint16_t*)(*pdata);
+  *p++ = val;
+  *pdata = (uint8_t*)p;
+}
+
+void MTPDevice::write32(uint32_t val, uint8_t **pdata) {
+  uint32_t *p = (uint32_t*)(*pdata);
+  *p++ = val;
+  *pdata = (uint8_t*)p;
+}
+
+
+void MTPDevice::write64(uint64_t val, uint8_t **pdata) {
+  // crash if not aligned!
+  uint8_t *p = *pdata;
+  union {
+    uint64_t u;
+    uint8_t  b[8];
+  } u64v;
+
+  u64v.u = val;
+
+  for (uint8_t i = 0; i < 8; i++) *p++ = u64v.b[i];
+  *pdata = p;
+}
+
+void MTPDevice::writeStr(const char *str, uint8_t **pdata) {
+  uint8_t *p = *pdata;
+  uint8_t str_len = strlen(str);
+  if (str_len) {
+    *p++ = ++str_len;
+    while (str_len--) { *p++ = *str++; *p++ = 0;}
+  } else *p++ = 0; // no string
+  *pdata = p;
+}
+
+
 
 void MTPDevice::MTPDevice::processDescriptorData(MTPContainer *c) {
 //C<- len:203 DATA: OP:1001(GET_DEVICE_INFO) TID:0 P:60064 640000 69006D14 72006300 73006F00
@@ -846,7 +1025,7 @@ void MTPDevice::processDevicePropDesc(MTPContainer *c)
   uint8_t read_write = read8(&pdata);
   switch (device_property_code) {
   case MTP_DEVICE_PROPERTY_DEVICE_FRIENDLY_NAME:
-    if (device_friendly_name_) free(device_friendly_name_);
+    if (device_friendly_name_) extmem_free(device_friendly_name_);
     device_friendly_name_ =  readAndAllocStr(&pdata);
     DBGPrintf("DEVICE_FRIENDLY_NAME: %s\n", device_friendly_name_);
     break;
@@ -895,8 +1074,8 @@ void MTPDevice::processGetStoreInfo(MTPContainer *c)
   storage_info_[index].storage.parent = nullptr;
   storage_info_[index].storage.child = nullptr;
 
-  if (storage_info_[index].storage.name) free(storage_info_[index].storage.name);
-  if (storage_info_[index].volume_id) free(storage_info_[index].volume_id);
+  if (storage_info_[index].storage.name) extmem_free(storage_info_[index].storage.name);
+  if (storage_info_[index].volume_id) extmem_free(storage_info_[index].volume_id);
 
   storage_info_[index].storage.name = readAndAllocStr(&pdata);
   storage_info_[index].volume_id = readAndAllocStr(&pdata);
@@ -982,7 +1161,7 @@ void MTPDevice::processGetObjectHandles(MTPContainer *c)
       else old_child_list = child->next;
     } else {
       // need to create a new one
-      child = (storage_list_t *)malloc(sizeof(storage_list_t));
+      child = (storage_list_t *)extmem_malloc(sizeof(storage_list_t));
       if (!child) break; //
       memset(child, 0, sizeof(storage_list_t));  // make sure every thing is zeroed out
       DBGPrintf("  %x - node allocated(%x)\n", child_id, (uint32_t)child);
@@ -1062,13 +1241,15 @@ void MTPDevice::processGetObjectPropValue(MTPContainer *c) {
     break;
   case MTP_PROPERTY_OBJECT_FILE_NAME:   //0xDC07:
     // not sure difference with NAME below...
-    if ( prop_node_->name ) free(prop_node_->name );
+    if ( prop_node_->name ) extmem_free(prop_node_->name );
     prop_node_->name =   readAndAllocStr(&pdata);
     break;
   case MTP_PROPERTY_DATE_CREATED:       //0xDC08:
     //writestring("");
     break;
   case MTP_PROPERTY_DATE_MODIFIED:      //0xDC09:
+    readStr(prop_node_->modify_date, &pdata); // save away the device date... 
+
     //writestring("");
     break;
   case MTP_PROPERTY_PARENT_OBJECT:      //0xDC0B:
@@ -1115,7 +1296,7 @@ void MTPDevice::processGetObjectPropValue(MTPContainer *c) {
     //write32(0);
     break;
   case MTP_PROPERTY_NAME:               //0xDC44:
-    if ( prop_node_->name ) free(prop_node_->name );
+    if ( prop_node_->name ) extmem_free(prop_node_->name );
     prop_node_->name =   readAndAllocStr(&pdata);
     break;
   default:
@@ -1245,12 +1426,24 @@ void MTPDevice::processMTPResponse(MTPContainer * c) {
         if (pending_events_active_) complete_processing_event(true);
       }
       break;
+    case MTP_OPERATION_SEND_OBJECT_INFO:
+      sendObjectMsg(c->params[0], c->params[1], c->params[2]);
+      break;
+        
+    case MTP_OPERATION_SEND_OBJECT:
+      // We completed transfer, lets ask for some details back
+      Serial.printf("\nMTP_OPERATION_SEND_OBJECT  completed new Object: %x", send_file_object_id_);
+      add_event_to_list(MTP_EVENT_OBJECT_ADDED, send_file_object_id_, 0);
+      break;
+
     default:
       DBGPrintf("Last operation: %x completed OK\n", last_mtp_op_);
+      printContainer(c, "R-> ");
       break;
     }
 
   } else {
     DBGPrintf("Last operation: %x return response:%x\n", last_mtp_op_, c->op);
+    printContainer(c, "R-> ");
   }
 }

@@ -26,6 +26,7 @@
 
 #include <USBHost_t36.h>
 #include <MTPDevice.h>
+#include <SD.h>
 
 USBHost myusb;
 USBHub hub1(myusb);
@@ -34,6 +35,8 @@ USBHIDParser hid2(myusb);
 MTPDevice mtpd(myusb);
 USBSerial_BigBuffer userial(myusb, 1);  // USB Serial  big or little... 
 USBSerialEmu seremu(myusb);
+
+SDClass sd;  // for now simple SD card stuff.. 
 
 
 USBDriver *drivers[] = {&hub1, &mtpd, &hid1, &hid2, &userial};
@@ -57,6 +60,10 @@ void setup()
   Serial.begin(2000000);
   while (!Serial) ; // wait for Arduino Serial Monitor
   Serial.println("\n\nUSB MTP Device Test Program");
+
+  // try to open SD Card...
+  if (sd.sdfs.begin(SdioConfig(FIFO_SDIO))) Serial.println("SD Card opened");
+  else Serial.println("SD Card did not open");
 
   myusb.begin();
   mtpd.setEventCompleteCB(&mtpd_event_callback);
@@ -101,7 +108,8 @@ void loop()
       Serial.printf("\n========== %s ===========\n", storage_info->storage.name);
       const MTPDevice::storage_list_t *node = storage_info->storage.child;
       while (node) {
-        Serial.printf("%s(%x) FMT:%x Size:%llu\n", node->name, node->id, node->format, node->size);
+        Serial.printf("%s(%x) FMT:%x Size:%llu Modify:%s\n", node->name, node->id, node->format, 
+              node->size, (uint8_t*)node->modify_date);
         node = node->next;
       }
 
@@ -113,8 +121,8 @@ void loop()
       Serial.printf("\n========== Enum completed (%u:%s ===========\n", enum_storage_list_item->id, enum_storage_list_item->name);
       enum_storage_list_item = enum_storage_list_item->child;  
       while (enum_storage_list_item) {
-        Serial.printf("%s(%x) FMT:%x Size:%llu\n", enum_storage_list_item->name, enum_storage_list_item->id, 
-              enum_storage_list_item->format, enum_storage_list_item->size);
+        Serial.printf("%s(%x) FMT:%x Size:%llu Modify:%s\n", enum_storage_list_item->name, enum_storage_list_item->id, 
+              enum_storage_list_item->format, enum_storage_list_item->size, (uint8_t*)enum_storage_list_item->modify_date);
         enum_storage_list_item = enum_storage_list_item->next;
       }
     }
@@ -122,16 +130,7 @@ void loop()
   
   if (Serial.available()) {
     int cmd = Serial.read(); // get the first char.
-    int ch = Serial.read(); // get next character
-    uint32_t id = 0;
-    while (ch == ' ') ch = Serial.read();
-    for(;;) {
-      if ((ch >= '0') && (ch <= '9')) id = id * 16 + ch - '0';
-      else if ((ch >= 'a') && (ch <= 'f')) id = id * 16 + 10 + ch - 'a';
-      else if ((ch >= 'A') && (ch <= 'F')) id = id * 16 + 10 + ch - 'A';
-      else break;
-      ch = Serial.read();
-    }
+    uint32_t id = SerialReadHexNum();
 
     switch (cmd) {
       case 's':
@@ -167,17 +166,85 @@ void loop()
             Serial.printf("Delete of object: %x failed status code: %x\n", id, mtp_resp);
           }
         break;  
+      case 'l': 
+          show_fs_directory_listing();
+        break;  
+      case 'c':
+        command_SendFile(id); 
+        break;
       default: 
         Serial.println("\n---------- Commands ----------");
         Serial.println("  s - Show storage list");
         Serial.println("  e - enum <ID>");
         Serial.println("  d - dump storage list");
         Serial.println("  R - Remove <ID> ");
+        Serial.println("  c - copy file <storage> <parent> <sd file name>");
+        Serial.println("  l - list sdfiles ");
         break;
     }
 
     while (Serial.read() != -1) ;
   }
+
+}
+
+uint32_t SerialReadHexNum() {
+  uint32_t val = 0;
+  int ch = Serial.read();
+  while (ch == ' ') ch = Serial.read();
+  for(;;) {
+    if ((ch >= '0') && (ch <= '9')) val = val * 16 + ch - '0';
+    else if ((ch >= 'a') && (ch <= 'f')) val = val * 16 + 10 + ch - 'a';
+    else if ((ch >= 'A') && (ch <= 'F')) val = val * 16 + 10 + ch - 'A';
+    else break;
+    ch = Serial.read();
+  }  
+  return val;
+}
+
+void show_fs_directory_listing() {
+  // right now start off with root.  later may pass in directory..
+  Serial.println("***Top level SD directory ***");
+  File root = sd.open("/", FILE_READ);
+  if (root) {
+    for(;;) {
+      File f = root.openNextFile();
+      if (!f) break;
+      Serial.printf("  %s ", f.name());
+      if (f.isDirectory()) Serial.println ("<DIR>");
+      else Serial.println(f.size());
+      f.close();
+    }
+    root.close();
+  }
+
+}
+
+void command_SendFile(uint32_t storage) {
+  Serial.println("SendFile called"); Serial.flush();
+  char filename[128];
+  char *psz = filename;
+  int ch;
+  uint32_t parent = SerialReadHexNum();
+
+  while ((ch = Serial.read()) > ' ') *psz++ = ch;
+  *psz = 0;
+  File f = sd.open(filename, FILE_READ);
+  if (f) {
+    uint32_t size = f.size();
+    Serial.printf("Command SendFile: %x %s\n", storage, filename, size);
+    Serial.flush();
+
+    // lets see what happens when we send a object info message
+    // right now root maybe...
+    mtpd.sendFileObject(storage, parent, filename, f);
+
+  } else {
+    Serial.printf("Command SendFile: %x %s File open failed\n", storage, filename);
+  }
+
+
+
 
 }
 

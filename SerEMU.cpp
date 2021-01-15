@@ -114,8 +114,9 @@ bool USBSerialEmu::hid_process_out_data(const Transfer_t *transfer)
 
 bool USBSerialEmu::sendPacket() 
 {
+#ifdef SEREMU_PRINT_DEBUG
 	USBHDBGSerial.printf("SEMU: SendPacket\n");
-
+#endif
 	if (!driver_) return false;
 	if (!driver_->sendPacket(tx_buffer_)) return false;
 	tx_out_data_pending_++;
@@ -159,9 +160,10 @@ int USBSerialEmu::availableForWrite()
 size_t USBSerialEmu::write(uint8_t c)
 {
 	// Single buffer, as our HID device has double buffers. 
+#ifdef SEREMU_PRINT_DEBUG
 	if (c >= ' ') USBHDBGSerial.printf("SEMU: %c\n", c);
 	else USBHDBGSerial.printf("SEMU: 0x%x\n", c);
-
+#endif
 
 	if (!driver_) return 0;
 
@@ -181,7 +183,9 @@ void USBSerialEmu::flush(void)
 {
 	if (!driver_) return;
 
+#ifdef SEREMU_PRINT_DEBUG
 	USBHDBGSerial.printf("SEMU: flush\n");
+#endif
 	driver_->stopTimer();  		// Stop longer timer.
 	driver_->startTimer(100);		// Start a mimimal timeout
 	if (tx_head_) sendPacket();
@@ -193,7 +197,9 @@ void USBSerialEmu::flush(void)
 
 void USBSerialEmu::hid_timer_event(USBDriverTimer *whichTimer)
 {
+#ifdef SEREMU_PRINT_DEBUG
 	USBHDBGSerial.printf("SEMU: Timer\n");
+#endif
 	if (!driver_) return;
 	driver_->stopTimer();
 	if (tx_head_) {
