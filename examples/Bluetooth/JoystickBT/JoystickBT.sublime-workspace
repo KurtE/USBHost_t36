@@ -1,0 +1,899 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+			[
+				"Joyst",
+				"Joystick1"
+			],
+			[
+				"text",
+				"textsize_y"
+			],
+			[
+				"_",
+				"_displayclipy2"
+			],
+			[
+				"_d",
+				"_displayclipy1"
+			],
+			[
+				"_disp",
+				"_displayclipx2"
+			],
+			[
+				"LATER",
+				"LATER"
+			],
+			[
+				"valu",
+				"valueStr"
+			],
+			[
+				"RA",
+				"RAWHID_RX_SIZE"
+			],
+			[
+				"map",
+				"mapIndexToModelNumber"
+			],
+			[
+				"current",
+				"currentcolor"
+			],
+			[
+				"new",
+				"newcolor_index"
+			],
+			[
+				"curre",
+				"currentcolor_index"
+			],
+			[
+				"colo",
+				"color_names"
+			],
+			[
+				"debug",
+				"debug_touch"
+			],
+			[
+				"MAD",
+				"MADCTL_MH"
+			],
+			[
+				"count",
+				"count_connections_"
+			],
+			[
+				"next",
+				"next_dcid_"
+			],
+			[
+				"_cs",
+				"_cs_flex_pin"
+			],
+			[
+				"_mo",
+				"_mosi_flex_pin"
+			],
+			[
+				"sck",
+				"_sck_flex_pin"
+			],
+			[
+				"last",
+				"last_16Bit_color"
+			],
+			[
+				"or",
+				"origin_x"
+			],
+			[
+				"pin",
+				"pinIsMOSI"
+			],
+			[
+				"__MK",
+				"__MK66FX1M0__"
+			],
+			[
+				"waitF",
+				"waitFifoNotFull"
+			],
+			[
+				"ILI",
+				"ILI9488_TFTWIDTH"
+			],
+			[
+				"color_index",
+				"color_index"
+			],
+			[
+				"_pall",
+				"_pallet"
+			],
+			[
+				"_pallet",
+				"_pallet_count"
+			],
+			[
+				"writec",
+				"write16BitColor"
+			],
+			[
+				"write",
+				"writedata16_cont"
+			],
+			[
+				"inq",
+				"inquiry_mode"
+			],
+			[
+				"joystick",
+				"joystickType_"
+			],
+			[
+				"uint",
+				"uint8_t"
+			],
+			[
+				"jo",
+				"joystickType"
+			],
+			[
+				"get",
+				"getButtons"
+			],
+			[
+				"fr",
+				"free_string_buffer"
+			],
+			[
+				"dev",
+				"device_driver_"
+			],
+			[
+				"changed",
+				"changed_mask"
+			],
+			[
+				"connec",
+				"connection_complete_"
+			],
+			[
+				"interrupt",
+				"interrupt_scid_"
+			],
+			[
+				"interr",
+				"interrupt_dcid_"
+			],
+			[
+				"chan",
+				"channelHigh"
+			],
+			[
+				"chann",
+				"channelLow"
+			],
+			[
+				"spe",
+				"special_case_device"
+			],
+			[
+				"MSB",
+				"MSBFIRST"
+			],
+			[
+				"ch",
+				"ch_out"
+			],
+			[
+				"CCM_ANALOG",
+				"CCM_ANALOG_PLL_VIDEO_CLR"
+			]
+		]
+	},
+	"buffers":
+	[
+		{
+			"file": "JoystickBT.ino",
+			"settings":
+			{
+				"buffer_size": 20426,
+				"encoding": "UTF-8",
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"contents": "Searching 67 files for \"needs connect to device\"\n\nC:\\Users\\kurte\\Documents\\Arduino\\libraries\\USBHost_t36\\bluetooth.cpp:\n  820  \t\tpending_control_ = PC_AUTHENTICATION_REQUESTED;\n  821  \t} else if (connections_[current_connection_].device_driver_ && (connections_[current_connection_].device_driver_->special_process_required & BTHIDInput::SP_NEED_CONNECT)) {\n  822: \t\tDBGPrintf(\"   Needs connect to device(PS4?)\\n\");\n  823  \t\t// The PS4 requires a connection request to it. \n  824  \t\tdelay(1);\n  ...\n 1494  \t\t\tpending_control_tx_ = STATE_TX_SEND_CONNECT_INT;\n 1495  \t\t} else if (connections_[current_connection_].device_driver_ && (connections_[current_connection_].device_driver_->special_process_required & BTHIDInput::SP_NEED_CONNECT)) {\n 1496: \t\t\tDBGPrintf(\"   Needs connect to device INT(PS4?)\\n\");\n 1497  \t\t\t// The PS4 requires a connection request to it. \n 1498  \t\t\tpending_control_tx_ = STATE_TX_SEND_CONNECT_INT;\n\n2 matches in 1 file\n\n\nSearching 67 files for \"Wireless Controller\"\n\nC:\\Users\\kurte\\Documents\\Arduino\\libraries\\USBHost_t36\\joystick.cpp:\n 1104  {\n 1105  \t// Sort of a hack, but try to map the name given from remote to a type...\n 1106: \tif (strncmp((const char *)remoteName, \"Wireless Controller\", 19) == 0) {\n 1107  \t\tDBGPrintf(\"  JoystickController::mapNameToJoystickType %s - set to PS4\\n\", remoteName);\n 1108  \t\tjoystickType_ = PS4;\n\n1 match in 1 file\n",
+			"settings":
+			{
+				"buffer_size": 1377,
+				"line_ending": "Windows",
+				"name": "Find Results",
+				"scratch": true
+			}
+		},
+		{
+			"file": "/C/Users/kurte/Documents/Arduino/libraries/USBHost_t36/bluetooth.cpp",
+			"settings":
+			{
+				"buffer_size": 62355,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "/C/Users/kurte/Documents/Arduino/libraries/USBHost_t36/keyboard.cpp",
+			"settings":
+			{
+				"buffer_size": 20709,
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "/C/Users/kurte/Documents/Arduino/libraries/USBHost_t36/joystick.cpp",
+			"settings":
+			{
+				"buffer_size": 41737,
+				"encoding": "UTF-8",
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "/C/arduino-1.8.15/hardware/teensy/avr/boards.txt",
+			"settings":
+			{
+				"buffer_size": 81961,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		}
+	],
+	"build_system": "Packages/User/Teensy.sublime-build",
+	"build_system_choices":
+	[
+		[
+			[
+				[
+					"Packages/C++/C++ Single File.sublime-build",
+					""
+				],
+				[
+					"Packages/C++/C++ Single File.sublime-build",
+					"Run"
+				],
+				[
+					"Packages/User/Teensy.sublime-build",
+					""
+				],
+				[
+					"Packages/User/Teensy.sublime-build",
+					"Clean"
+				],
+				[
+					"Packages/User/Teensy.sublime-build",
+					"New Sketch"
+				],
+				[
+					"Packages/User/Teensy.sublime-build",
+					"Verify"
+				],
+				[
+					"Packages/User/Teensy.sublime-build",
+					"Tools Set"
+				]
+			],
+			[
+				"Packages/User/Teensy.sublime-build",
+				""
+			]
+		],
+		[
+			[
+				[
+					"Packages/User/Teensy.sublime-build",
+					""
+				],
+				[
+					"Packages/User/Teensy.sublime-build",
+					"Clean"
+				],
+				[
+					"Packages/User/Teensy.sublime-build",
+					"New Sketch"
+				],
+				[
+					"Packages/User/Teensy.sublime-build",
+					"Verify"
+				],
+				[
+					"Packages/User/Teensy.sublime-build",
+					"Tools Set"
+				]
+			],
+			[
+				"Packages/User/Teensy.sublime-build",
+				""
+			]
+		]
+	],
+	"build_varint": "",
+	"command_palette":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+			[
+				"pa",
+				"Package Control: Install Package"
+			],
+			[
+				"usb",
+				"USB Logic Packet format"
+			],
+			[
+				"regreplace: r",
+				"RegReplace: Settings"
+			],
+			[
+				"regreplace edit",
+				"RegReplace: Edit Regular Expression Rule"
+			],
+			[
+				"regreplace ",
+				"RegReplace: Create New Regular Expression Rule"
+			],
+			[
+				"regreplace:",
+				"RegReplace: Quick Start Guide"
+			],
+			[
+				"regreplace: ",
+				"RegReplace: Create New Regular Expression Rule"
+			],
+			[
+				"insta",
+				"Package Control: Install Package"
+			],
+			[
+				"packag",
+				"Package Control: Install Package"
+			],
+			[
+				"disa",
+				"Package Control: Disable Package"
+			],
+			[
+				"install",
+				"Package Control: Install Package"
+			],
+			[
+				"package",
+				"Install Package Control"
+			]
+		],
+		"width": 0.0
+	},
+	"console":
+	{
+		"height": 286.0,
+		"history":
+		[
+			"view.run_command(\"example\")",
+			"view.run_command(\"example\""
+		]
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"expanded_folders":
+	[
+		"/D/GitHub/USBHost_t36/examples/Bluetooth/JoystickBT",
+		"/C/Users/kurte/Documents/Arduino/libraries/USBHost_t36"
+	],
+	"file_history":
+	[
+		"/D/GitHub/USBHost_t36/examples/Bluetooth/JoystickBT/JoystickBT.sublime-project",
+		"/C/Users/kurte/Documents/Arduino/libraries/USBHost_t36/hub.cpp",
+		"/C/Users/kurte/Desktop/foo.txt",
+		"/C/Users/kurte/Desktop/foo2.txt",
+		"/D/GitHub/USBHost_t36/examples/Bluetooth/JoystickBT/JoystickBT.ino",
+		"/D/GitHub/USBHost_t36/.gitignore",
+		"/C/Users/kurte/Documents/Arduino/Github/LSS_Test_sketches/LSS_PhoenixUSBJoystick/Hex_Cfg.h",
+		"/C/Users/kurte/Documents/Arduino/Github/LSS_Test_sketches/LSS_PhoenixUSBJoystick/LSS_Phoenix.h",
+		"/C/Users/kurte/Documents/Arduino/Github/LSS_Test_sketches/LSS_PhoenixUSBJoystick/LSS_Phoenix_Driver_lss.cpp",
+		"/C/Users/kurte/AppData/Local/Temp/arduino_build_LSS_PhoenixUSBJoystick.ino/sketch/LSS_Phoenix_Driver_lss.cpp",
+		"/C/Users/kurte/Documents/Arduino/libraries/TeensyDebug/gdbstub.cpp",
+		"/C/Users/kurte/Documents/Arduino/libraries/TeensyDebug/TeensyDebug.h",
+		"/C/Users/kurte/AppData/Local/Temp/Build.log",
+		"/C/Users/kurte/AppData/Local/Temp/arduino_build_LSS_PhoenixUSBJoystick.ino/sketch/LSS_Phoenix_Input_USB_Joystick.cpp",
+		"/C/Users/kurte/AppData/Local/Temp/arduino_build_LSS_PhoenixUSBJoystick.ino/sketch/Phoenix_Driver_lss.cpp",
+		"/C/Users/kurte/Documents/Arduino/Github/LSS_Test_sketches/LSS_PhoenixUSBJoystick/Phoenix_Input_USB_Joystick.cpp",
+		"/C/Users/kurte/Documents/Arduino/Github/LSS_Test_sketches/LSS_PhoenixUSBJoystick/_Phoenix_Input_Commander.cpp",
+		"/C/Users/kurte/Documents/Arduino/libraries/Phoenix_Input_PS2/Phoenix_Input_PS2.h",
+		"/C/Users/kurte/Documents/Arduino/Github/LSS_Test_sketches/LSS_PhoenixUSBJoystick/Phoenix_Driver_lss.cpp",
+		"/C/Users/kurte/AppData/Local/Temp/arduino_build_LSS_PhoenixUSBJoystick.ino/sketch/_Phoenix_Driver_lss.cpp",
+		"/C/Users/kurte/AppData/Local/Temp/arduino_build_LSS_PhoenixUSBJoystick.ino/sketch/_Phoenix_Driver_lss.h",
+		"/C/Users/kurte/AppData/Local/Temp/arduino_build_LSS_PhoenixUSBJoystick.ino/sketch/_Phoenix_Input_USB_Joystick.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/RA8875/RA8875.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9488_t3/src/ILI9488_t3.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/HX8357_t3n/src/HX8357_t3n.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/Ra8876LiteTeensy/src/RA8876Registers.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/Ra8876LiteTeensy/examples/RA8876Rotate/RA8876Rotate.ino",
+		"/C/Users/kurte/Documents/Arduino/libraries/HX8357_t3n/src/ILI9341_fonts.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/RA8875/_settings/RA8875UserSettings.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/RA8875/_includes/RA8875Registers.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/Ra8876LiteTeensy/src/RA8876_t3.cpp",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_t3n/src/ILI9341_t3n.cpp",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_t3n/src/ILI9341_t3n.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/RA8875/RA8875.cpp",
+		"/C/Users/kurte/Documents/Arduino/libraries/Ra8876LiteTeensy/src/Ra8876_Lite.cpp",
+		"/C/Users/kurte/Documents/Arduino/libraries/Ra8876LiteTeensy/examples/ILI_Ada_FontTest4/ILI_Ada_FontTest4.ino",
+		"/C/Users/kurte/Documents/Arduino/libraries/Ra8876LiteTeensy/src/Ra8876_Lite.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_TimesNewRomanItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_Arial.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9488_t3/src/ILI9488_t3.cpp",
+		"/C/Users/kurte/Documents/Arduino/libraries/Ra8876LiteTeensy/examples/ILI_GFX_FontTest/ILI_GFX_FontTest.ino",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_AwesomeF000.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_AwesomeF100.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_AwesomeF080.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_TimesNewRomanBoldItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_TimesNewRomanBold.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_TimesNewRoman.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_OpenSans.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_NunitoLight.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_NunitoBold.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_Nunito.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_Michroma.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_Logisoso.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationSerifItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationSerifBoldItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationSerifBold.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_ArialBoldItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_AwesomeF180.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_AwesomeF200.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_ChanceryItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_ComicSansMS.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_ComicSansMSBold.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_CourierNew.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_CourierNewBold.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_CourierNewBoldItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_CourierNewItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_Crystal.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_DroidSans.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_DroidSans_Bold.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_DroidSansMono.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_DroidSerif_Bold.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_DroidSerif_BoldItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_DroidSerif_Italic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_DroidSerif_Regular.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_Georgia.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_GeorgiaBold.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_GeorgiaBoldItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_GeorgiaItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_Impact.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationMono.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationMonoBold.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationMonoBoldItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationMonoItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationSans.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationSerif.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationSansNarrowItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationSansNarrowBoldItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationSansNarrowBold.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationSansBold.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationSansBoldItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationSansItalic.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_LiberationSansNarrow.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_ArialBold.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_ArialBlack.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9341_fonts/src/font_ArialItalic.h",
+		"/D/GitHub/ILI9341_fonts/src/def_fonts.h",
+		"/D/Sublime Text Build 3180 x64/Data/Packages/User/Teensy.sublime-build",
+		"/D/GitHub/RA8875/_includes/RA8875ColorPresets.h",
+		"/D/GitHub/RA8875/RA8875.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/Ra8876LiteTeensy/README.txt",
+		"/C/Users/kurte/Documents/Arduino/libraries/SdFat/src/SdFatConfig.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/Ra8876LiteTeensy/examples/gauges/gauges.ino",
+		"/C/Users/kurte/Documents/Arduino/libraries/Ra8876LiteTeensy/examples/graphics/graphics.ino",
+		"/C/Users/kurte/AppData/Local/Temp/arduino_build_LSS_Phoenix.ino/sketch/_Phoenix_Driver_lss.h",
+		"/C/Users/kurte/AppData/Local/Temp/arduino_build_LSS_Phoenix.ino/sketch/_Phoenix_Input_Commander.h",
+		"/C/Users/kurte/Documents/Arduino/Github/LSS_Test_sketches/LSS_Phoenix/Compile.cmd",
+		"/C/Users/kurte/Documents/Arduino/libraries/AlternativeLSS/src/LynxmotionLSS.cpp",
+		"/C/Users/kurte/Documents/Arduino/libraries/AlternativeLSS/src/LynxmotionLSS.h",
+		"/C/Users/kurte/Documents/Arduino/Teensy Tests/Configure_test_graphicstest9488/libraries/Configure/ILI9488_sketch_options.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9488_options/ILI9488_sketch_options.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9488_t3/src/ILI9488_enable_extmem.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/Ra8876LiteTeensy/src/RA8876_t3.h",
+		"/C/Users/kurte/Documents/Arduino/libraries/ILI9488_t3/ILI9488_t3.h",
+		"/C/arduino-1.8.12/hardware/teensy/avr/libraries/ILI9488_t3/ILI9488_t3.h",
+		"/C/arduino-1.8.12/hardware/teensy/avr/cores/teensy4/eeprom.c",
+		"/C/arduino-1.8.12/hardware/teensy/avr/cores/teensy4/digital.c",
+		"/C/arduino-1.8.12/hardware/teensy/avr/cores/teensy4/HardwareSerial.cpp",
+		"/C/arduino-1.8.12/hardware/teensy/avr/cores/teensy4/HardwareSerial5.cpp",
+		"/C/arduino-1.8.12/hardware/teensy/avr/cores/teensy4/HardwareSerial3.cpp",
+		"/C/arduino-1.8.12/hardware/teensy/avr/cores/teensy4/HardwareSerial8.cpp",
+		"/C/arduino-1.8.12/hardware/teensy/avr/cores/teensy4/HardwareSerial1.cpp",
+		"/C/arduino-1.8.12/hardware/teensy/avr/cores/teensy4/AudioStream.cpp",
+		"/C/arduino-1.8.12/hardware/teensy/avr/cores/teensy4/pwm.c",
+		"/C/arduino-1.8.12/hardware/teensy/avr/cores/teensy4/startup.c",
+		"/C/arduino-1.8.12/hardware/teensy/avr/libraries/RA8875/_settings/RA8875UserSettings.h",
+		"/C/arduino-1.8.12/hardware/teensy/avr/cores/teensy4/bootdata.c",
+		"/C/arduino-1.8.12/hardware/teensy/avr/cores/teensy4/avr/eeprom.h",
+		"/C/arduino-1.8.12/hardware/teensy/avr/cores/teensy4/analog.c"
+	],
+	"find":
+	{
+		"height": 31.0
+	},
+	"find_in_files":
+	{
+		"height": 113.0,
+		"where_history":
+		[
+			""
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"arm/",
+			"Wireless Controller",
+			"needs connect to device",
+			"displayps4data"
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+		],
+		"reverse": false,
+		"show_context": true,
+		"use_buffer2": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "JoystickBT.ino",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 20426,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								618,
+								618
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Deviot (Arduino IDE)/deviot.sublime-syntax",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 1377,
+						"regions":
+						{
+							"match":
+							{
+								"flags": 112,
+								"regions":
+								[
+									[
+										381,
+										404
+									],
+									[
+										764,
+										787
+									],
+									[
+										1197,
+										1216
+									]
+								],
+								"scope": ""
+							}
+						},
+						"selection":
+						[
+							[
+								1150,
+								1156
+							]
+						],
+						"settings":
+						{
+							"detect_indentation": false,
+							"line_numbers": false,
+							"output_tag": 2,
+							"result_base_dir": "",
+							"result_file_regex": "^([^ \t].*):$",
+							"result_line_regex": "^ +([0-9]+):",
+							"scroll_past_end": true,
+							"syntax": "Packages/Default/Find Results.hidden-tmLanguage"
+						},
+						"translation.x": 0.0,
+						"translation.y": 418.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 3,
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"file": "/C/Users/kurte/Documents/Arduino/libraries/USBHost_t36/bluetooth.cpp",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 62355,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								29605,
+								29605
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Deviot (Arduino IDE)/deviot.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 17455.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 4,
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "/C/Users/kurte/Documents/Arduino/libraries/USBHost_t36/keyboard.cpp",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 20709,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Deviot (Arduino IDE)/deviot.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 5,
+					"type": "text"
+				},
+				{
+					"buffer": 4,
+					"file": "/C/Users/kurte/Documents/Arduino/libraries/USBHost_t36/joystick.cpp",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 41737,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								30851,
+								30851
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Deviot (Arduino IDE)/deviot.sublime-syntax",
+							"tab_size": 8,
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 18643.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 2,
+					"type": "text"
+				},
+				{
+					"buffer": 5,
+					"file": "/C/arduino-1.8.15/hardware/teensy/avr/boards.txt",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 81961,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								19444,
+								19444
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Text/Plain text.tmLanguage"
+						},
+						"translation.x": 0.0,
+						"translation.y": 8603.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"type": "text"
+				}
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 31.0
+	},
+	"input":
+	{
+		"height": 43.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.astyle_error_message":
+	{
+		"height": 0.0
+	},
+	"output.deviot":
+	{
+		"height": 150.0
+	},
+	"output.exec":
+	{
+		"height": 243.0
+	},
+	"output.find_results":
+	{
+		"height": 0.0
+	},
+	"output.mdpopups":
+	{
+		"height": 0.0
+	},
+	"output.reg_replace":
+	{
+		"height": 313.0
+	},
+	"output.unsaved_changes":
+	{
+		"height": 363.0
+	},
+	"pinned_build_system": "Packages/User/Teensy.sublime-build",
+	"project": "JoystickBT.sublime-project",
+	"replace":
+	{
+		"height": 58.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+			[
+				"550",
+				"ArduCAM\\examples\\mini\\ArduCAM_Mini_5MP_OV5640_AutoFocus\\ArduCAM_Mini_5MP_OV5640_AutoFocus.ino"
+			]
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 500.0,
+		"last_filter": "",
+		"selected_items":
+		[
+			[
+				"",
+				"D:\\GitHub\\TMM-HB01B0-Camera\\TMM-HM01B0\\examples\\hm01b0_KitchenSink\\hmb01b0_KitchenSink.sublime-project"
+			]
+		],
+		"width": 380.0
+	},
+	"select_symbol":
+	{
+		"height": 392.0,
+		"last_filter": "CCM_CCGR2",
+		"selected_items":
+		[
+			[
+				"CCM_CCGR2",
+				"CCM_CCGR2"
+			]
+		],
+		"width": 592.0
+	},
+	"selected_group": 0,
+	"settings":
+	{
+	},
+	"show_minimap": true,
+	"show_open_files": true,
+	"show_tabs": true,
+	"side_bar_visible": false,
+	"side_bar_width": 373.0,
+	"status_bar_visible": true,
+	"template_settings":
+	{
+	}
+}
