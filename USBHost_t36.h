@@ -1839,22 +1839,23 @@ class BluetoothController: public USBDriver {
 public:
 	static const uint8_t MAX_CONNECTIONS = 4;
 	typedef struct {
-    BTHIDInput * 	device_driver_ = nullptr;;
-    uint16_t		connection_rxid_ = 0;
-    uint16_t		control_dcid_ = 0x70;
-    uint16_t		interrupt_dcid_ = 0x71;
-    uint16_t		interrupt_scid_;
-    uint16_t		control_scid_;
-
-    uint8_t			device_bdaddr_[6];// remember devices address
-    uint8_t			device_ps_repetion_mode_ ; // mode
-    uint8_t			device_clock_offset_[2];
-    uint32_t		device_class_;	// class of device. 
-    uint16_t		device_connection_handle_;	// handle to connection 
-	uint8_t    		remote_ver_;
-	uint16_t		remote_man_;
-	uint8_t			remote_subv_;
-	uint8_t			connection_complete_ = false;	//
+		BTHIDInput * 	device_driver_ = nullptr;;
+		uint16_t		connection_rxid_ = 0;
+		uint16_t		control_dcid_ = 0x70;
+		uint16_t		interrupt_dcid_ = 0x71;
+		uint16_t		sdp_dcid_ = 0x40;	
+		uint16_t		interrupt_scid_;
+		uint16_t		control_scid_;
+		uint16_t		sdp_scid_;
+		uint8_t		device_bdaddr_[6];// remember devices address
+		uint8_t		device_ps_repetion_mode_ ; // mode
+		uint8_t		device_clock_offset_[2];
+		uint32_t		device_class_;	// class of device. 
+		uint16_t		device_connection_handle_;	// handle to connection 
+		uint8_t    	remote_ver_;
+		uint16_t		remote_man_;
+		uint8_t		remote_subv_;
+		uint8_t		connection_complete_ = false;	//
 	} connection_info_t;
 
 	BluetoothController(USBHost &host, bool pair = false, const char *pin = "0000") : do_pair_device_(pair), pair_pincode_(pin), delayTimer_(this) 
