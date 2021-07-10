@@ -1334,5 +1334,37 @@ size_t USBSerialBase::write(uint8_t c)
 	return 1;
 }
 
+bool USBSerialBase::setDTR(bool fSet)
+{
+	println("setDTR: ", fSet, DEC);
+	if (!device) return false;
+	// NOT sure if we should check pending control and not allow it? OR???
 
+	switch (sertype) {
+		default: 
+			return false; // Not sure how to do...
+		case PL2303:
+		case CDCACM: 
+			mk_setup(setup, 0x21, 0x22, fSet? 3 : 0, 0, 0);
+			break;
+		case FTDI: 
+			println("  >>FTDI");
+			// The high 8 is mask and low 8 is setting. 
+			mk_setup(setup, 0x40, 1, fSet? 0x0303 : 0x0300, 0, 0);
+			break;
+		// not sure yet on these	
+		//case CH341: 
+		//case CP210X: 
+	}
+
+	pending_control = 0;
+	control_queued = true;
+	queue_Control_Transfer(device, &setup, NULL, this);
+
+	// Lets wait until sent.. 
+	while (control_queued) {
+		yield();	// not sure if we want to yield or what? 
+	}
+	return true;
+}
 
