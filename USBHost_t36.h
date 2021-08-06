@@ -941,7 +941,7 @@ public:
 	// PS3 pair function. hack, requires that it be connect4ed by USB and we have the address of the Bluetooth dongle...
 	bool PS3Pair(uint8_t* bdaddr);
 
-	
+	bool PS4GetCurrentPairing(uint8_t* bdaddr);	
 	
 protected:
 	// From USBDriver

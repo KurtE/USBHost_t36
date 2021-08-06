@@ -1214,3 +1214,12 @@ bool JoystickController::PS3Pair(uint8_t* bdaddr) {
 	}
 	return false;
 }
+
+//=============================================================================
+// Retrieve the current pairing information for a PS4...
+//=============================================================================
+bool JoystickController::PS4GetCurrentPairing(uint8_t* bdaddr) {
+	if (!driver_ || (joystickType_ != PS4)) return false;
+	// Try asking PS4 for information
+	return driver_->sendControlPacket(0xA1, 1, 0x312, 0, 0, nullptr); 
+}
