@@ -159,10 +159,15 @@ void USBHIDParser::control(const Transfer_t *transfer)
 {
 	println("control callback (hid)");
 	print_hexbytes(transfer->buffer, transfer->length);
+	if (topusage_drivers[0]) {
+		if (topusage_drivers[0]->hid_process_control(transfer)) {
+			return; // the called function can tell us they processed it.
+		}
+	}
+
 	// To decode hex dump to human readable HID report summary:
 	//   http://eleccelerator.com/usbdescreqparser/
 	uint32_t mesg = transfer->setup.word1;
-	Serial.printf("USBHIDParser::control msg: %x %u\n", mesg, transfer->length);
 	println("  mesg = ", mesg, HEX);
 	if (mesg == 0x22000681 && transfer->length == descsize) { // HID report descriptor
 		println("  got report descriptor");

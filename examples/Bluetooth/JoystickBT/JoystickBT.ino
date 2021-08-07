@@ -310,18 +310,19 @@ void displayPS4Data()
       uint8_t bdaddr_cur[10];
       Serial.println("\n*** Try getting BT Pairing information ***");        
       joystick1.PS4GetCurrentPairing(bdaddr_cur);  
+      Serial.printf("Current BTADDR: %X:%X:%X:%X:%X:%X\n", bdaddr_cur[5],bdaddr_cur[4],bdaddr_cur[3],bdaddr_cur[2],bdaddr_cur[1],bdaddr_cur[0]);
 
   } else if (buttons != buttons_prev) {
       uint8_t lr = 0;
       uint8_t lg = 0;
       uint8_t lb = 0;
-      if(buttons == 0x10008){//Srq
+      if(buttons == 1){//Srq
         lr = 0xff;
       }
-      if(buttons == 0x40008){//Circ
+      if(buttons == 4){//Circ
         lg = 0xff;
       }
-      if(buttons == 0x80008){//Tri
+      if(buttons == 8){//Tri
         lb = 0xff;
       }
       

@@ -522,6 +522,32 @@ bool JoystickController::hid_process_out_data(const Transfer_t *transfer)
 	return true;
 }
 
+bool JoystickController::hid_process_in_data(const Transfer_t *transfer)
+{
+	uint8_t *pb = (uint8_t *)transfer->buffer;
+	if (!transfer->buffer || *pb == 1) return false; // don't do report 1
+	Serial.printf("hid_process_in_data %x %u:", transfer->buffer, transfer->length);
+	uint8_t cnt = transfer->length;
+	if (cnt > 16) cnt = 16;
+	while(cnt--) Serial.printf(" %02x", *pb++);
+	Serial.printf("\n");
+
+	return false;
+}
+
+bool JoystickController::hid_process_control(const Transfer_t *transfer) {
+	Serial.printf("USBHIDParser::control msg: %x %x : %x %u :", transfer->setup.word1, transfer->setup.word2, transfer->buffer, transfer->length);
+	if (transfer->buffer) {
+		uint16_t cnt = transfer->length;
+		if (cnt > 16) cnt = 16;
+		uint8_t *pb = (uint8_t*)transfer->buffer;
+		while (cnt--) Serial.printf(" %02x", *pb++);
+	}
+	Serial.printf("\n");
+	send_Control_packet_active_ = false;
+	return false;
+}
+
 void JoystickController::joystickDataClear() {
 	joystickEvent = false;
 	anychange = false;
@@ -1218,8 +1244,17 @@ bool JoystickController::PS3Pair(uint8_t* bdaddr) {
 //=============================================================================
 // Retrieve the current pairing information for a PS4...
 //=============================================================================
+uint8_t pair_buffer[0x10];
 bool JoystickController::PS4GetCurrentPairing(uint8_t* bdaddr) {
 	if (!driver_ || (joystickType_ != PS4)) return false;
 	// Try asking PS4 for information
-	return driver_->sendControlPacket(0xA1, 1, 0x312, 0, 0, nullptr); 
+	memset(txbuf_, 0, 0x10);
+	send_Control_packet_active_ = true;
+	if (!driver_->sendControlPacket(0xA1, 1, 0x312, 0, 0x10, txbuf_)) 
+		return false;
+	elapsedMillis em = 0;
+	while ((em < 500) && send_Control_packet_active_) ;
+	memcpy(bdaddr, &txbuf_[10], 6);
+	return true;
+
 }
