@@ -201,7 +201,7 @@ void UpdateActiveDeviceInfo() {
         if (drivers[i] == &bluet) {
           const uint8_t *bdaddr = bluet.myBDAddr();
           // remember it...
-          Serial.printf("  BDADDR: %x:%x:%x:%x:%x:%x\n", bdaddr[0], bdaddr[1], bdaddr[2], bdaddr[3], bdaddr[4], bdaddr[5]);
+          Serial.printf("  BDADDR: %02X:%02X:%02X:%02X:%02X:%02X\n", bdaddr[5], bdaddr[4], bdaddr[3], bdaddr[2], bdaddr[1], bdaddr[0]);
           for (uint8_t i = 0; i < 6; i++) last_bdaddr[i] = bdaddr[i];
         }
       }
@@ -316,7 +316,7 @@ void displayPS4Data()
         if (!joystick1.PS4GetCurrentPairing(bdaddr_cur)) {
           Serial.println(" - failed - Could not read pairing information");
           } else {
-            Serial.printf("Current BTADDR: %X:%X:%X:%X:%X:%X\n", bdaddr_cur[5],bdaddr_cur[4],bdaddr_cur[3],bdaddr_cur[2],bdaddr_cur[1],bdaddr_cur[0]);
+            Serial.printf("Current BTADDR: %02X:%02X:%02X:%02X:%02X:%02X\n", bdaddr_cur[5],bdaddr_cur[4],bdaddr_cur[3],bdaddr_cur[2],bdaddr_cur[1],bdaddr_cur[0]);
             if (! joystick1.PS4Pair(last_bdaddr)) {
               Serial.println("  Pairing call Failed");
             } else {
@@ -373,7 +373,7 @@ void displayPS3Data()
     } else if (!hiddrivers[0]) {  // Kludge see if we are connected as HID?
       Serial.println(" - failed - PS3 device not plugged into USB");
     } else {
-      Serial.printf(" - Attempt pair to: %x:%x:%x:%x:%x:%x\n", last_bdaddr[0], last_bdaddr[1], last_bdaddr[2], last_bdaddr[3], last_bdaddr[4], last_bdaddr[5]);
+      Serial.printf(" - Attempt pair to: %02X:%02X:%02X:%02X:%02X:%02X\n", last_bdaddr[5], last_bdaddr[4], last_bdaddr[3], last_bdaddr[2], last_bdaddr[1], last_bdaddr[0]);
 
       if (! joystick1.PS3Pair(last_bdaddr)) {
         Serial.println("  Pairing call Failed");
