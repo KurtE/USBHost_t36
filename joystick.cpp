@@ -1244,7 +1244,6 @@ bool JoystickController::PS3Pair(uint8_t* bdaddr) {
 //=============================================================================
 // Retrieve the current pairing information for a PS4...
 //=============================================================================
-uint8_t pair_buffer[0x10];
 bool JoystickController::PS4GetCurrentPairing(uint8_t* bdaddr) {
 	if (!driver_ || (joystickType_ != PS4)) return false;
 	// Try asking PS4 for information
@@ -1256,5 +1255,20 @@ bool JoystickController::PS4GetCurrentPairing(uint8_t* bdaddr) {
 	while ((em < 500) && send_Control_packet_active_) ;
 	memcpy(bdaddr, &txbuf_[10], 6);
 	return true;
-
 }
+
+bool JoystickController::PS4Pair(uint8_t* bdaddr) {
+	if (!driver_ || (joystickType_ != PS4)) return false;
+	// Lets try to setup a message to send... 
+	static const uint8_t ps4_pair_msg[] PROGMEM = {0x13, 0xff, 0xff, 0xff,0xff, 0xff, 0xff, 
+			0x56, 0xE8, 0x81, 0x38, 0x08, 0x06, 0x51, 0x41, 0xC0, 0x7F, 0x12, 0xAA, 0xD9, 0x66, 0x3C, 0xCE};
+
+	// Note the above 0xff sare place holders for the bdaddr
+	memcpy(txbuf_, ps4_pair_msg, sizeof(ps4_pair_msg));
+	for(uint8_t i = 0; i < 6; i++)
+            txbuf_[i + 1] = bdaddr[5 - i]; // Copy into buffer, has to be written reversed, so it is MSB first
+
+	send_Control_packet_active_ = true;
+	return driver_->sendControlPacket(0x21, 0x09, 0x0313, 0, sizeof(ps4_pair_msg), txbuf_);
+}
+

@@ -308,9 +308,23 @@ void displayPS4Data()
   if ((buttons & 0x100) && !(buttons_prev & 0x100) && (buttons & 0x30)) {
     // so far just try call temporary pair info call...
       uint8_t bdaddr_cur[10];
-      Serial.println("\n*** Try getting BT Pairing information ***");        
-      joystick1.PS4GetCurrentPairing(bdaddr_cur);  
-      Serial.printf("Current BTADDR: %X:%X:%X:%X:%X:%X\n", bdaddr_cur[5],bdaddr_cur[4],bdaddr_cur[3],bdaddr_cur[2],bdaddr_cur[1],bdaddr_cur[0]);
+      Serial.print("\nPS4 Pairing Request");
+      if (!last_bdaddr[0] && !last_bdaddr[1] && !last_bdaddr[2] && !last_bdaddr[3] && !last_bdaddr[4] && !last_bdaddr[5]) {
+        Serial.println(" - failed - no Bluetooth adapter has been plugged in");
+      } else {
+        Serial.println("\n*** Try getting BT Pairing information ***");        
+        if (!joystick1.PS4GetCurrentPairing(bdaddr_cur)) {
+          Serial.println(" - failed - Could not read pairing information");
+          } else {
+            Serial.printf("Current BTADDR: %X:%X:%X:%X:%X:%X\n", bdaddr_cur[5],bdaddr_cur[4],bdaddr_cur[3],bdaddr_cur[2],bdaddr_cur[1],bdaddr_cur[0]);
+            if (! joystick1.PS4Pair(last_bdaddr)) {
+              Serial.println("  Pairing call Failed");
+            } else {
+              Serial.println("  Pairing complete (I hope), make sure Bluetooth adapter is plugged in and try PS4 without USB");
+            }
+
+          }
+      }
 
   } else if (buttons != buttons_prev) {
       uint8_t lr = 0;

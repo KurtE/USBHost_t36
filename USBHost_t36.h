@@ -943,6 +943,7 @@ public:
 	bool PS3Pair(uint8_t* bdaddr);
 
 	bool PS4GetCurrentPairing(uint8_t* bdaddr);	
+	bool PS4Pair(uint8_t* bdaddr);	
 	
 protected:
 	// From USBDriver
