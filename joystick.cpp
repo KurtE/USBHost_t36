@@ -1266,7 +1266,7 @@ bool JoystickController::PS4Pair(uint8_t* bdaddr) {
 	// Note the above 0xff sare place holders for the bdaddr
 	memcpy(txbuf_, ps4_pair_msg, sizeof(ps4_pair_msg));
 	for(uint8_t i = 0; i < 6; i++)
-            txbuf_[i + 1] = bdaddr[5 - i]; // Copy into buffer, has to be written reversed, so it is MSB first
+            txbuf_[i + 1] = bdaddr[i]; 
 
 	send_Control_packet_active_ = true;
 	return driver_->sendControlPacket(0x21, 0x09, 0x0313, 0, sizeof(ps4_pair_msg), txbuf_);

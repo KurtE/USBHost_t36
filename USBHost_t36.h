@@ -1852,9 +1852,10 @@ public:
     uint16_t		connection_rxid_ = 0;
     uint16_t		control_dcid_ = 0x70;
     uint16_t		interrupt_dcid_ = 0x71;
+		uint16_t		sdp_dcid_ = 0x40;	
     uint16_t		interrupt_scid_;
     uint16_t		control_scid_;
-
+		uint16_t		sdp_scid_;
     uint8_t			device_bdaddr_[6];// remember devices address
     uint8_t			device_ps_repetion_mode_ ; // mode
     uint8_t			device_clock_offset_[2];
