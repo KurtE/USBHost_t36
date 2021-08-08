@@ -822,10 +822,16 @@ void BluetoothController::handle_hci_connection_complete() {
 		sendHCIAuthenticationRequested();
 		pending_control_ = PC_AUTHENTICATION_REQUESTED;
 	} else if (connections_[current_connection_].device_driver_ && (connections_[current_connection_].device_driver_->special_process_required & BTHIDInput::SP_NEED_CONNECT)) {
-		DBGPrintf("   Needs connect to device(PS4?)\n");
+		DBGPrintf("   Needs connect to device(PS4?)");
 		// The PS4 requires a connection request to it. 
-		delay(1);
-		sendl2cap_ConnectionRequest(connections_[current_connection_].device_connection_handle_, connections_[current_connection_].connection_rxid_, connections_[current_connection_].control_dcid_, HID_CTRL_PSM);
+		// But maybe not clones
+		if (connections_[current_connection_].device_class_ == 0x2508) {
+			DBGPrintf(" Yes\n");
+			delay(1);
+			sendl2cap_ConnectionRequest(connections_[current_connection_].device_connection_handle_, connections_[current_connection_].connection_rxid_, connections_[current_connection_].control_dcid_, HID_CTRL_PSM);
+		} else {
+			DBGPrintf(" No - Clone\n");
+		}
 #if 0		
 		delay(1);
 		
