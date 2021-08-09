@@ -1953,7 +1953,8 @@ private:
 	void sendl2cap_ConnectionRequest(uint16_t handle, uint8_t rxid, uint16_t scid, uint16_t psm);
 	void sendl2cap_ConfigRequest(uint16_t handle, uint8_t rxid, uint16_t dcid);
 	void sendl2cap_ConfigResponse(uint16_t handle, uint8_t rxid, uint16_t scid);
-    void sendL2CapCommand(uint16_t handle, uint8_t* data, uint8_t nbytes, uint8_t channelLow = 0x01, uint8_t channelHigh = 0x00);
+	void sendl2cap_DisconnectResponse(uint16_t handle, uint8_t rxid, uint16_t dcid, uint16_t scid);
+	void sendL2CapCommand(uint16_t handle, uint8_t* data, uint8_t nbytes, uint8_t channelLow = 0x01, uint8_t channelHigh = 0x00);
 
 	void process_l2cap_connection_request(uint8_t *data);
 	void process_l2cap_connection_response(uint8_t *data);
@@ -1961,6 +1962,15 @@ private:
 	void process_l2cap_config_response(uint8_t *data);
 	void process_l2cap_command_reject(uint8_t *data);
 	void process_l2cap_disconnect_request(uint8_t *data);
+
+	// Add starts of SDP processing.
+	void process_sdp_service_search_request(uint8_t *data);
+	void process_sdp_service_search_response(uint8_t *data);
+	void process_sdp_service_attribute_request(uint8_t *data);
+	void process_sdp_service_attribute_response(uint8_t *data);
+	void process_sdp_service_search_attribute_request(uint8_t *data);
+	void process_sdp_service_search_attribute_response(uint8_t *data);
+
 
 	void setHIDProtocol(uint8_t protocol);
 	void handleHIDTHDRData(uint8_t *buffer);	// Pass the whole buffer...
