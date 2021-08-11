@@ -1948,6 +1948,10 @@ private:
 	void handle_hci_link_key_notification();
 	void handle_hci_link_key_request();
 	void queue_next_hci_command();
+	
+	void handle_hci_io_capability_response();
+	void handle_hci_io_capability_request();
+	void handle_hci_io_capability_request_reply();
 
 	void sendl2cap_ConnectionResponse(uint16_t handle, uint8_t rxid, uint16_t dcid, uint16_t scid, uint8_t result);
 	void sendl2cap_ConnectionRequest(uint16_t handle, uint8_t rxid, uint16_t scid, uint16_t psm);
