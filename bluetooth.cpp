@@ -142,7 +142,8 @@ void inline VDBGPrintf(...) {};
 		,EV_AUTHENTICATION_COMPLETE= 0x06,EV_REMOTE_NAME_COMPLETE= 0x07,EV_ENCRYPTION_CHANGE= 0x08,EV_CHANGE_CONNECTION_LINK= 0x09,EV_ROLE_CHANGED= 0x12
 		,EV_NUM_COMPLETE_PKT= 0x13,EV_PIN_CODE_REQUEST= 0x16,EV_LINK_KEY_REQUEST= 0x17,EV_LINK_KEY_NOTIFICATION= 0x18,EV_DATA_BUFFER_OVERFLOW= 0x1A
 		,EV_MAX_SLOTS_CHANGE= 0x1B,EV_READ_REMOTE_VERSION_INFORMATION_COMPLETE= 0x0C,EV_QOS_SETUP_COMPLETE= 0x0D,EV_COMMAND_COMPLETE= 0x0E,EV_COMMAND_STATUS= 0x0F
-		,EV_LOOPBACK_COMMAND= 0x19,EV_PAGE_SCAN_REP_MODE= 0x20, EV_INQUIRY_RESULTS_WITH_RSSI=0x22, EV_EXTENDED_INQUIRY_RESULT=0x2F };
+		,EV_LOOPBACK_COMMAND= 0x19,EV_PAGE_SCAN_REP_MODE= 0x20, EV_INQUIRY_RESULTS_WITH_RSSI=0x22, EV_EXTENDED_INQUIRY_RESULT=0x2F,
+		EV_IO_CAPABILITY_REQUEST=0x31, EV_IO_CAPABILITY_RESPONSE=0x32,};
 
 
 
@@ -445,6 +446,12 @@ void BluetoothController::rx_data(const Transfer_t *transfer)
 				break;
 			case EV_EXTENDED_INQUIRY_RESULT:
 				handle_hci_extended_inquiry_result();
+				break;
+			case EV_IO_CAPABILITY_RESPONSE:
+				handle_hci_io_capability_response();
+				break;
+			case EV_IO_CAPABILITY_REQUEST:
+			    handle_hci_io_capability_request();
 				break;
 			default:
 				break;
@@ -814,6 +821,45 @@ void BluetoothController::handle_hci_extended_inquiry_result()
 		pending_control_ = PC_INQUIRE_CANCEL;
 	}
 }
+
+void BluetoothController::handle_hci_io_capability_request()
+{
+        DBGPrintf("    Received IO Capability Request: %d\n", rxbuf_[2] );
+		handle_hci_io_capability_request_reply();
+}
+
+void BluetoothController::handle_hci_io_capability_request_reply()
+ {
+	uint8_t hcibuf[12];
+	hcibuf[0] = 0x2B; // HCI OCF = 2B
+	hcibuf[1] = 0x01 << 2; // HCI OGF = 1
+	hcibuf[2] = 0x09;
+	hcibuf[3] = connections_[current_connection_].device_bdaddr_[0]; // 6 octet bdaddr
+	hcibuf[4] = connections_[current_connection_].device_bdaddr_[1];
+	hcibuf[5] = connections_[current_connection_].device_bdaddr_[2];
+	hcibuf[6] = connections_[current_connection_].device_bdaddr_[3];
+	hcibuf[7] = connections_[current_connection_].device_bdaddr_[4];
+	hcibuf[8] = connections_[current_connection_].device_bdaddr_[5];
+	hcibuf[9] = 0x03; // NoInputNoOutput
+	hcibuf[10] = 0x00; // OOB authentication data not present
+	hcibuf[11] = 0x00; // MITM Protection Not Required – No Bonding. Numeric comparison with automatic accept allowed
+
+	DBGPrintf("HCI_IO_CAPABILITY_REPLY\n");
+	sendHCICommand(0x01, sizeof(hcibuf), hcibuf);
+}
+
+void BluetoothController::handle_hci_io_capability_response()
+{
+	DBGPrintf("    Received IO Capability Response:\n");
+	DBGPrintf("    IO capability: ");
+	DBGPrintf ("%x\n", rxbuf_[8]);
+	DBGPrintf("    OOB data present: ");
+	DBGPrintf("%x\n", rxbuf_[9], 0x80);
+	DBGPrintf("    nAuthentication request: ");
+	DBGPrintf("%x\n", rxbuf_[10]);
+}
+
+
 
 void BluetoothController::handle_hci_inquiry_complete() {
 	VDBGPrintf("    Inquiry Complete - status: %d\n", rxbuf_[2]);
