@@ -19,3 +19,4 @@
 examples/Bluetooth/JoystickBT/Compile.cmd
 *.sublime-project
 *.sublime-workspace
+examples/Bluetooth/MouseBT/Compile.cmd

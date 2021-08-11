@@ -152,6 +152,7 @@ void inline VDBGPrintf(...) {};
 enum {PC_RESET = 1, PC_WRITE_CLASS_DEVICE, PC_READ_BDADDR, PC_READ_LOCAL_VERSION, 
 			PC_SEND_WRITE_INQUIRE_MODE, PC_SEND_SET_EVENT_MASK, PC_SEND_INQUIRE, 
 			PC_INQUIRE_CANCEL=100, PC_AUTHENTICATION_REQUESTED=110, PC_LINK_KEY_NEGATIVE=120, PC_PIN_CODE_REPLY=130,
+			PC_CONNECT_AFTER_SDP_DISCONNECT=140,
 			PC_WRITE_SCAN_PAGE=200};
 //////////////
 
@@ -585,6 +586,13 @@ void BluetoothController::handle_hci_command_complete()
 			break;
 		case HCI_LE_SET_SCAN_RSP_DATA:			//0x2009
 			break;
+		case HCI_LINK_KEY_NEG_REPLY:
+			if (connections_[current_connection_].device_class_ == 0x2508)	{
+				DBGPrintf("Hack see if we can catch the Terios here");
+				pending_control_ = PC_CONNECT_AFTER_SDP_DISCONNECT;
+			}
+			break;
+
 	}
 	// And queue up the next command
 	queue_next_hci_command();
@@ -640,6 +648,11 @@ void BluetoothController::queue_next_hci_command()
 		case PC_PIN_CODE_REPLY:
 			break;
 
+		case PC_CONNECT_AFTER_SDP_DISCONNECT:
+			// Hack see if we can get the Joystick to initiate the create a connection...
+			sendl2cap_ConnectionRequest(connections_[current_connection_].device_connection_handle_, connections_[current_connection_].connection_rxid_, connections_[current_connection_].control_dcid_, HID_CTRL_PSM);
+			pending_control_ = 0;  // 
+			break;
 		// None Pair mode
 		case PC_WRITE_SCAN_PAGE:
 			sendHCIWriteScanEnable(2);
@@ -842,7 +855,7 @@ void BluetoothController::handle_hci_io_capability_request_reply()
 	hcibuf[8] = connections_[current_connection_].device_bdaddr_[5];
 	hcibuf[9] = 0x03; // NoInputNoOutput
 	hcibuf[10] = 0x00; // OOB authentication data not present
-	hcibuf[11] = 0x00; // MITM Protection Not Required – No Bonding. Numeric comparison with automatic accept allowed
+	hcibuf[11] = 0x00; // MITM Protection Not Required ? No Bonding. Numeric comparison with automatic accept allowed
 
 	DBGPrintf("HCI_IO_CAPABILITY_REPLY\n");
 	sendHCICommand(0x01, sizeof(hcibuf), hcibuf);
@@ -1347,7 +1360,7 @@ void BluetoothController::sendl2cap_ConnectionResponse(uint16_t handle, uint8_t 
     l2capbuf[10] = 0x00; // No further information
     l2capbuf[11] = 0x00;
 
-	DBGPrintf("L2CAP_CMD_CONNECTION_RESPONSE\n");
+	DBGPrintf("L2CAP_CMD_CONNECTION_RESPONSE(RXID:%x, DCID:%x, SCID:%x RES:%x)\n", rxid, dcid, scid, result);
     sendL2CapCommand(handle, l2capbuf, sizeof(l2capbuf));
 }
 
@@ -1364,7 +1377,7 @@ void BluetoothController::sendl2cap_ConnectionRequest(uint16_t handle, uint8_t r
     l2capbuf[6] = scid & 0xff; // Source CID
     l2capbuf[7] = (scid >> 8) & 0xff;
 
-	DBGPrintf("ConnectionRequest\n");
+	DBGPrintf("ConnectionRequest (RXID:%x, SCID:%x, PSM:%x)\n", rxid, scid, psm);
     sendL2CapCommand(handle, l2capbuf, sizeof(l2capbuf));
 }
 
@@ -1383,7 +1396,7 @@ void BluetoothController::sendl2cap_ConfigRequest(uint16_t handle, uint8_t rxid,
         l2capbuf[10] = 0xFF; // MTU
         l2capbuf[11] = 0xFF;
 
-		DBGPrintf("L2CAP_ConfigRequest\n");
+		DBGPrintf("L2CAP_ConfigRequest(RXID:%x, DCID:%x)\n", rxid, dcid);
         sendL2CapCommand(handle, l2capbuf, sizeof(l2capbuf));
 }
 
@@ -1404,7 +1417,7 @@ void BluetoothController::sendl2cap_ConfigResponse(uint16_t handle, uint8_t rxid
         l2capbuf[12] = 0xA0;
         l2capbuf[13] = 0x02;
 
-		DBGPrintf("L2CAP_ConfigResponse\n");
+		DBGPrintf("L2CAP_ConfigResponse(RXID:%x, SCID:%x)\n", rxid, scid);
         sendL2CapCommand(handle, l2capbuf, sizeof(l2capbuf));
 }
 
@@ -1419,7 +1432,7 @@ void BluetoothController::sendl2cap_DisconnectResponse(uint16_t handle, uint8_t 
         l2capbuf[6] = scid & 0xff; // SCID CID
         l2capbuf[7] = (scid >> 8) & 0xff;
 
-		DBGPrintf("L2CAP_DisconnectResponse\n");
+		DBGPrintf("L2CAP_DisconnectResponse(RXID:%x, DCID:%x, SCID:%x)\n", rxid, dcid, scid);
         sendL2CapCommand(handle, l2capbuf, sizeof(l2capbuf));
 }
 
@@ -1726,7 +1739,7 @@ void BluetoothController::process_sdp_service_attribute_response(uint8_t *data) 
 }
 
 void BluetoothController::process_sdp_service_search_attribute_request(uint8_t *data) {
-	DBGPrintf("process_sdp_service_search_attribute_request\n");
+	DBGPrintf("\n### process_sdp_service_search_attribute_request ###\n");
 	// Print out the data like UHS2
 #ifdef DEBUG_BT
 	uint16_t service = data[1] << 8 | data[2];
