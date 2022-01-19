@@ -205,7 +205,12 @@ void USBHost::begin()
 	USBPHY2_CTRL_CLR = USBPHY_CTRL_SFTRST | USBPHY_CTRL_CLKGATE;
 	USBPHY2_CTRL_SET = USBPHY_CTRL_ENUTMILEVEL2 | USBPHY_CTRL_ENUTMILEVEL3;
 	USBPHY2_PWD = 0;
-
+	#ifdef ARDUINO_TEENSY41
+	IOMUXC_SW_MUX_CTL_PAD_GPIO_EMC_40 = 5;
+	IOMUXC_SW_PAD_CTL_PAD_GPIO_EMC_40 = 0x0008; // slow speed, weak 150 ohm drive
+	GPIO8_GDIR |= 1<<26;
+	GPIO8_DR_SET = 1<<26;
+	#endif
 #endif
 	delay(10);
 
@@ -234,7 +239,7 @@ void USBHost::begin()
 	USBHS_PERIODICLISTBASE = (uint32_t)periodictable;
 	USBHS_FRINDEX = 0;
 	USBHS_ASYNCLISTADDR = 0;
-	USBHS_USBCMD = USBHS_USBCMD_ITC(8) | USBHS_USBCMD_RS |
+	USBHS_USBCMD = USBHS_USBCMD_ITC(1) | USBHS_USBCMD_RS |
 		USBHS_USBCMD_ASP(3) | USBHS_USBCMD_ASPE | USBHS_USBCMD_PSE |
 		#if PERIODIC_LIST_SIZE == 8
 		USBHS_USBCMD_FS2 | USBHS_USBCMD_FS(3);
@@ -745,7 +750,6 @@ bool USBHost::queue_Data_Transfer(Pipe_t *pipe, void *buffer, uint32_t len, USBD
 	transfer = allocate_Transfer();
 	if (!transfer) return false;
 	data = transfer;
-	if (len) {
 		for (count=((len-1) >> 14); count; count--) {
 			next = allocate_Transfer();
 			if (!next) {
@@ -760,7 +764,6 @@ bool USBHost::queue_Data_Transfer(Pipe_t *pipe, void *buffer, uint32_t len, USBD
 			}
 			data->qtd.next = (uint32_t)next;
 			data = next;
-		}
 	}	
 	// last qTD needs info for followup
 	data->qtd.next = 1;

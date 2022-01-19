@@ -55,6 +55,7 @@ bool USBHIDParser::claim(Device_t *dev, int type, const uint8_t *descriptors, ui
 	uint32_t numendpoint = descriptors[4];
 	if (numendpoint < 1 || numendpoint > 2) return false;
 	if (descriptors[5] != 3) return false; // bInterfaceClass, 3 = HID
+	println(" bInterfaceNumber =   ", descriptors[2]);
 	println(" bInterfaceClass =    ", descriptors[5]);
 	println(" bInterfaceSubClass = ", descriptors[6]);
 	println(" bInterfaceProtocol = ", descriptors[7]);
@@ -148,6 +149,7 @@ bool USBHIDParser::claim(Device_t *dev, int type, const uint8_t *descriptors, ui
 		topusage_drivers[i] = NULL;
 	}
 	// request the HID report descriptor
+	bInterfaceNumber = descriptors[2];	// save away the interface number; 
 	mk_setup(setup, 0x81, 6, 0x2200, descriptors[2], descsize); // get report desc
 	queue_Control_Transfer(dev, &setup, descriptor, this);
 	return true;
@@ -157,6 +159,12 @@ void USBHIDParser::control(const Transfer_t *transfer)
 {
 	println("control callback (hid)");
 	print_hexbytes(transfer->buffer, transfer->length);
+	if (topusage_drivers[0]) {
+		if (topusage_drivers[0]->hid_process_control(transfer)) {
+			return; // the called function can tell us they processed it.
+		}
+	}
+
 	// To decode hex dump to human readable HID report summary:
 	//   http://eleccelerator.com/usbdescreqparser/
 	uint32_t mesg = transfer->setup.word1;
@@ -165,6 +173,7 @@ void USBHIDParser::control(const Transfer_t *transfer)
 		println("  got report descriptor");
 		parse();
 		queue_Data_Transfer(in_pipe, report, in_size, this);
+		queue_Data_Transfer(in_pipe, report2, in_size, this);
 		if (device->idVendor == 0x054C && 
 				((device->idProduct == 0x0268) || (device->idProduct == 0x042F)/* || (device->idProduct == 0x03D5)*/)) {
 			println("send special PS3 feature command");
@@ -213,10 +222,12 @@ void USBHIDParser::in_data(const Transfer_t *transfer)
 	}
 	USBHDBGSerial.printf("\n"); */
 
+	/*
 	print("HID: ");
 	print(use_report_id);
 	print(" - ");
 	print_hexbytes(transfer->buffer, transfer->length);
+	*/
 	const uint8_t *buf = (const uint8_t *)transfer->buffer;
 	uint32_t len = transfer->length;
 
@@ -232,12 +243,14 @@ void USBHIDParser::in_data(const Transfer_t *transfer)
 			}
 		}
 	}
-	queue_Data_Transfer(in_pipe, report, in_size, this);
+	if (buf == report2) queue_Data_Transfer(in_pipe, report2, in_size, this);
+	else queue_Data_Transfer(in_pipe, report, in_size, this);
 }
 
 
 void USBHIDParser::out_data(const Transfer_t *transfer)
 {
+	Serial.printf(">>>USBHIDParser::out_data\n");
 	println("USBHIDParser:out_data called (instance)");
 	// A packet completed. lets mark it as done and call back
 	// to top reports handler.  We unmark our checkmark to
@@ -248,6 +261,14 @@ void USBHIDParser::out_data(const Transfer_t *transfer)
 		topusage_drivers[0]->hid_process_out_data(transfer);
 	}
 }
+
+void USBHIDParser::timer_event(USBDriverTimer *whichTimer)
+{
+	if (topusage_drivers[0]) {
+		topusage_drivers[0]->hid_timer_event(whichTimer);
+	}	
+}
+
 
 bool USBHIDParser::sendPacket(const uint8_t *buffer, int cb) {
 	if (!out_size || !out_pipe) return false;	
@@ -289,8 +310,11 @@ bool USBHIDParser::sendControlPacket(uint32_t bmRequestType, uint32_t bRequest,
 			uint32_t wValue, uint32_t wIndex, uint32_t wLength, void *buf)
 {
 	// Use setup structure to build packet 
+	Serial.printf(">>> SendControlPacket: %x %x %x %x %d", bmRequestType, bRequest, wValue, wIndex, wLength);
 	mk_setup(setup, bmRequestType, bRequest, wValue, wIndex, wLength); // ps3 tell to send report 1?
-	return queue_Control_Transfer(device, &setup, buf, this);
+	bool fReturn =  queue_Control_Transfer(device, &setup, buf, this);
+	Serial.printf(" return: %u\n", fReturn);
+	return fReturn;
 }
 
 
