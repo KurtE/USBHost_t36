@@ -213,7 +213,7 @@ bool JoystickController::setLEDs(uint8_t lr, uint8_t lg, uint8_t lb)
 {
 	// Need to know which joystick we are on.  Start off with XBox support - maybe need to add some enum value for the known
 	// joystick types. 
-	Serial.printf("::setLEDS(%x %x %x)\n", lr, lg, lb);
+	//Serial.printf("::setLEDS(%x %x %x)\n", lr, lg, lb);
 	if ((leds_[0] != lr) || (leds_[1] != lg) || (leds_[2] != lb)) {
 		leds_[0] = lr;
 		leds_[1] = lg;

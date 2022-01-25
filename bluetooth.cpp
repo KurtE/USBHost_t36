@@ -30,8 +30,8 @@
 #define print   USBHost::print_
 #define println USBHost::println_//#define DEBUG_BT
 
-#define DEBUG_BT
-#define DEBUG_BT_VERBOSE
+//#define DEBUG_BT
+//#define DEBUG_BT_VERBOSE
 
 #ifndef DEBUG_BT
 #undef DEBUG_BT_VERBOSE
@@ -1622,6 +1622,9 @@ void BluetoothController::process_l2cap_disconnect_request(uint8_t *data) {
 	uint16_t scid = data[6]+((uint16_t)data[7] << 8); 
 	DBGPrintf("    L2CAP disconnect request: ID: %d, Length:%x, Dest:%x, Source:%x\n",
 		data[1], data[2] + ((uint16_t)data[3] << 8), dcid, scid);
+    if (connections_[current_connection_].device_driver_) {
+        connections_[current_connection_].device_driver_->release_bluetooth();
+    }
 }
 
 
