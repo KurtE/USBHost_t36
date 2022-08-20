@@ -30,6 +30,7 @@
 #error "USBHost_t36 only works with Teensy 3.6 or Teensy 4.x.  Please select it in Tools > Boards"
 #endif
 #include "utility/imxrt_usbhs.h"
+#include "utility/msc.h"
 
 // Dear inquisitive reader, USB is a complex protocol defined with
 // very specific terminology.  To have any chance of understand this
@@ -57,10 +58,12 @@
 // your best effort to read chapter 4 before asking USB questions!
 
 
+// Uncomment this line to see lots of debugging info!
 #define USBHOST_PRINT_DEBUG
+
+
+// This can let you control where to send the debugging messages
 //#define USBHDBGSerial	Serial1
-
-
 #ifndef USBHDBGSerial
 #define USBHDBGSerial	Serial
 #endif
@@ -96,6 +99,7 @@ typedef enum { CLAIM_NO=0, CLAIM_REPORT, CLAIM_INTERFACE} hidclaim_t;
 // USBHost.
 class USBDriver;
 class USBDriverTimer;
+class USBHIDInput;
 
 /************************************************/
 /*  Added Defines                               */
@@ -485,6 +489,8 @@ class USBDriverTimer {
 public:
 	USBDriverTimer() { }
 	USBDriverTimer(USBDriver *d) : driver(d) { }
+	USBDriverTimer(USBHIDInput *hd) : driver(nullptr), hidinput(hd) { }
+
 	void init(USBDriver *d) { driver = d; };
 	void start(uint32_t microseconds);
 	void stop();
@@ -493,6 +499,7 @@ public:
 	uint32_t started_micros; // testing only
 private:
 	USBDriver      *driver;
+	USBHIDInput    *hidinput;
 	uint32_t       usec;
 	USBDriverTimer *next;
 	USBDriverTimer *prev;
@@ -515,14 +522,17 @@ public:
 	const uint8_t *serialNumber()
 		{  return  ((mydevice == nullptr) || (mydevice->strbuf == nullptr)) ? nullptr : &mydevice->strbuf->buffer[mydevice->strbuf->iStrings[strbuf_t::STR_ID_SERIAL]]; }
 
+
 private:
 	virtual hidclaim_t claim_collection(USBHIDParser *driver, Device_t *dev, uint32_t topusage);
 	virtual bool hid_process_in_data(const Transfer_t *transfer) {return false;}
 	virtual bool hid_process_out_data(const Transfer_t *transfer) {return false;}
+	virtual bool hid_process_control(const Transfer_t *transfer) {return false;}
 	virtual void hid_input_begin(uint32_t topusage, uint32_t type, int lgmin, int lgmax);
 	virtual void hid_input_data(uint32_t usage, int32_t value);
 	virtual void hid_input_end();
 	virtual void disconnect_collection(Device_t *dev);
+	virtual void hid_timer_event(USBDriverTimer *whichTimer) { }
 	void add_to_list();
 	USBHIDInput *next = NULL;
 	friend class USBHIDParser;
@@ -655,13 +665,21 @@ private:
 
 class USBHIDParser : public USBDriver {
 public:
-	USBHIDParser(USBHost &host) { init(); }
+	USBHIDParser(USBHost &host) : hidTimer(this) { init(); }
 	static void driver_ready_for_hid_collection(USBHIDInput *driver);
 	bool sendPacket(const uint8_t *buffer, int cb=-1);
 	void setTXBuffers(uint8_t *buffer1, uint8_t *buffer2, uint8_t cb);
 
 	bool sendControlPacket(uint32_t bmRequestType, uint32_t bRequest,
 			uint32_t wValue, uint32_t wIndex, uint32_t wLength, void *buf);
+
+	// Atempt for RAWhid and SEREMU to take over processing of data 
+	// 
+	uint16_t inSize(void) {return in_size;}
+	uint16_t outSize(void) {return out_size;}
+	void startTimer(uint32_t microseconds) {hidTimer.start(microseconds);}
+	void stopTimer() {hidTimer.stop();}
+	uint8_t interfaceNumber() { return bInterfaceNumber;}
 protected:
 	enum { TOPUSAGE_LIST_LEN = 4 };
 	enum { USAGE_LIST_LEN = 24 };
@@ -670,6 +688,7 @@ protected:
 	virtual void disconnect();
 	static void in_callback(const Transfer_t *transfer);
 	static void out_callback(const Transfer_t *transfer);
+	virtual void timer_event(USBDriverTimer *whichTimer);
 	void in_data(const Transfer_t *transfer);
 	void out_data(const Transfer_t *transfer);
 	bool check_if_using_report_id();
@@ -678,10 +697,6 @@ protected:
 	void parse(uint16_t type_and_report_id, const uint8_t *data, uint32_t len);
 	void init();
 
-	// Atempt for RAWhid to take over processing of data 
-	// 
-	uint16_t inSize(void) {return in_size;}
-	uint16_t outSize(void) {return out_size;}
 
 	uint8_t activeSendMask(void) {return txstate;} 
 
@@ -696,15 +711,18 @@ private:
 	setup_t setup;
 	uint8_t descriptor[800];
 	uint8_t report[64];
+	uint8_t report2[64];
 	uint16_t descsize;
 	bool use_report_id;
 	Pipe_t mypipes[3] __attribute__ ((aligned(32)));
-	Transfer_t mytransfers[4] __attribute__ ((aligned(32)));
+	Transfer_t mytransfers[5] __attribute__ ((aligned(32)));
 	strbuf_t mystring_bufs[1];
 	uint8_t txstate = 0;
 	uint8_t *tx1 = nullptr;
 	uint8_t *tx2 = nullptr;
 	bool hid_driver_claimed_control_ = false;
+	USBDriverTimer hidTimer;
+	uint8_t bInterfaceNumber = 0;
 };
 
 //--------------------------------------------------------------------------
@@ -740,6 +758,8 @@ public:
 	uint8_t  getOemKey() { return keyOEM; }
 	void     attachPress(void (*f)(int unicode)) { keyPressedFunction = f; }
 	void     attachRelease(void (*f)(int unicode)) { keyReleasedFunction = f; }
+	void     attachRawPress(void (*f)(uint8_t keycode)) { rawKeyPressedFunction = f; }
+	void     attachRawRelease(void (*f)(uint8_t keycode)) { rawKeyReleasedFunction = f; }
 	void     LEDS(uint8_t leds);
 	uint8_t  LEDS() {return leds_.byte;}
 	void     updateLEDS(void);
@@ -786,6 +806,8 @@ private:
 	void key_release(uint32_t mod, uint32_t key);
 	void (*keyPressedFunction)(int unicode);
 	void (*keyReleasedFunction)(int unicode);
+	void (*rawKeyPressedFunction)(uint8_t keycode) = nullptr;
+	void (*rawKeyReleasedFunction)(uint8_t keycode) = nullptr;
 	Pipe_t *datapipe;
 	setup_t setup;
 	uint8_t report[8];
@@ -898,6 +920,7 @@ public:
 	const uint8_t *manufacturer();
 	const uint8_t *product();
 	const uint8_t *serialNumber();
+    bool btactive() { return btdevice != nullptr; }
 	operator bool() { return (((device != nullptr) || (mydevice != nullptr || (btdevice != nullptr))) && connected_); }	// override as in both USBDriver and in USBHIDInput
 
 	bool    available() { return joystickEvent; }
@@ -915,13 +938,14 @@ public:
     bool setLEDs(uint8_t lr, uint8_t lg, uint8_t lb);  // sets Leds, 
     bool inline setLEDs(uint32_t leds) {return setLEDs((leds >> 16) & 0xff, (leds >> 8) & 0xff, leds & 0xff);}  // sets Leds - passing one arg for all leds 
 	enum { STANDARD_AXIS_COUNT = 10, ADDITIONAL_AXIS_COUNT = 54, TOTAL_AXIS_COUNT = (STANDARD_AXIS_COUNT+ADDITIONAL_AXIS_COUNT) };
-	typedef enum { UNKNOWN=0, PS3, PS4, XBOXONE, XBOX360, PS3_MOTION, SpaceNav} joytype_t;
+	typedef enum { UNKNOWN=0, PS3, PS4, XBOXONE, XBOX360, PS3_MOTION, SpaceNav, SWITCH} joytype_t;
 	joytype_t joystickType() {return joystickType_;} 
 
 	// PS3 pair function. hack, requires that it be connect4ed by USB and we have the address of the Bluetooth dongle...
 	bool PS3Pair(uint8_t* bdaddr);
 
-	
+	bool PS4GetCurrentPairing(uint8_t* bdaddr);	
+	bool PS4Pair(uint8_t* bdaddr);	
 	
 protected:
 	// From USBDriver
@@ -933,9 +957,11 @@ protected:
 	virtual hidclaim_t claim_collection(USBHIDParser *driver, Device_t *dev, uint32_t topusage);
 	virtual void hid_input_begin(uint32_t topusage, uint32_t type, int lgmin, int lgmax);
 	virtual void hid_input_data(uint32_t usage, int32_t value);
+	virtual bool hid_process_control(const Transfer_t *transfer);
 	virtual void hid_input_end();
 	virtual void disconnect_collection(Device_t *dev);
 	virtual bool hid_process_out_data(const Transfer_t *transfer);
+	virtual bool hid_process_in_data(const Transfer_t *transfer);
 
 		// Bluetooth data
 	virtual bool claim_bluetooth(BluetoothController *driver, uint32_t bluetooth_class, uint8_t *remoteName);
@@ -998,6 +1024,7 @@ private:
 	Pipe_t 			*txpipe_;
 	uint8_t 		rxbuf_[64];	// receive circular buffer
 	uint8_t			txbuf_[64];		// buffer to use to send commands to joystick 
+	volatile bool 		send_Control_packet_active_;
 	// Mapping table to say which devices we handle
 	typedef struct {
 		uint16_t 	idVendor;
@@ -1012,7 +1039,7 @@ private:
 
 //--------------------------------------------------------------------------
 
-class MIDIDevice : public USBDriver {
+class MIDIDeviceBase : public USBDriver {
 public:
 	enum { SYSEX_MAX_LEN = 290 };
 
@@ -1038,9 +1065,12 @@ public:
 		ActiveSensing         = 0xFE, // System Real Time - Active Sensing
 		SystemReset           = 0xFF, // System Real Time - System Reset
 	};
-	MIDIDevice(USBHost &host) { init(); }
-	MIDIDevice(USBHost *host) { init(); }
-
+	MIDIDeviceBase(USBHost &host, uint32_t *rx, uint32_t *tx1, uint32_t *tx2,
+		uint16_t bufsize, uint32_t *rqueue, uint16_t qsize) :
+			txtimer(this), rx_buffer(rx), tx_buffer1(tx1), tx_buffer2(tx2),
+			rx_queue(rqueue), max_packet_size(bufsize), rx_queue_size(qsize) {
+				init();
+		}
 	void sendNoteOff(uint8_t note, uint8_t velocity, uint8_t channel, uint8_t cable=0) {
 		send(0x80, note, velocity, channel, cable);
 	}
@@ -1278,6 +1308,7 @@ public:
 protected:
 	virtual bool claim(Device_t *device, int type, const uint8_t *descriptors, uint32_t len);
 	virtual void disconnect();
+	virtual void timer_event(USBDriverTimer *timer);
 	static void rx_callback(const Transfer_t *transfer);
 	static void tx_callback(const Transfer_t *transfer);
 	void rx_data(const Transfer_t *transfer);
@@ -1290,15 +1321,22 @@ protected:
 private:
 	Pipe_t *rxpipe;
 	Pipe_t *txpipe;
-	enum { MAX_PACKET_SIZE = 64 };
-	enum { RX_QUEUE_SIZE = 80 }; // must be more than MAX_PACKET_SIZE/4
-	uint32_t rx_buffer[MAX_PACKET_SIZE/4];
-	uint32_t tx_buffer1[MAX_PACKET_SIZE/4];
-	uint32_t tx_buffer2[MAX_PACKET_SIZE/4];
+	USBDriverTimer txtimer;
+	//enum { MAX_PACKET_SIZE = 64 };
+	//enum { RX_QUEUE_SIZE = 80 }; // must be more than MAX_PACKET_SIZE/4
+	//uint32_t rx_buffer[MAX_PACKET_SIZE/4];
+	//uint32_t tx_buffer1[MAX_PACKET_SIZE/4];
+	//uint32_t tx_buffer2[MAX_PACKET_SIZE/4];
+	uint32_t * const rx_buffer;
+	uint32_t * const tx_buffer1;
+	uint32_t * const tx_buffer2;
 	uint16_t rx_size;
 	uint16_t tx_size;
-	uint32_t rx_queue[RX_QUEUE_SIZE];
+	//uint32_t rx_queue[RX_QUEUE_SIZE];
+	uint32_t * const rx_queue;
 	bool rx_packet_queued;
+	const uint16_t max_packet_size;
+	const uint16_t rx_queue_size;
 	uint16_t rx_head;
 	uint16_t rx_tail;
 	volatile uint8_t tx1_count;
@@ -1339,16 +1377,56 @@ private:
 	strbuf_t mystring_bufs[1];
 };
 
+class MIDIDevice : public MIDIDeviceBase {
+public:
+	MIDIDevice(USBHost &host) :
+		MIDIDeviceBase(host, rx, tx1, tx2, MAX_PACKET_SIZE, queue, RX_QUEUE_SIZE) {};
+	// MIDIDevice(USBHost *host) : ....
+private:
+	enum { MAX_PACKET_SIZE = 64 };
+	enum { RX_QUEUE_SIZE = 80 }; // must be more than MAX_PACKET_SIZE/4
+	uint32_t rx[MAX_PACKET_SIZE/4];
+	uint32_t tx1[MAX_PACKET_SIZE/4];
+	uint32_t tx2[MAX_PACKET_SIZE/4];
+	uint32_t queue[RX_QUEUE_SIZE];
+};
+
+class MIDIDevice_BigBuffer : public MIDIDeviceBase {
+public:
+	MIDIDevice_BigBuffer(USBHost &host) :
+		MIDIDeviceBase(host, rx, tx1, tx2, MAX_PACKET_SIZE, queue, RX_QUEUE_SIZE) {};
+	// MIDIDevice(USBHost *host) : ....
+private:
+	enum { MAX_PACKET_SIZE = 512 };
+	enum { RX_QUEUE_SIZE = 400 }; // must be more than MAX_PACKET_SIZE/4
+	uint32_t rx[MAX_PACKET_SIZE/4];
+	uint32_t tx1[MAX_PACKET_SIZE/4];
+	uint32_t tx2[MAX_PACKET_SIZE/4];
+	uint32_t queue[RX_QUEUE_SIZE];
+};
+
+
 //--------------------------------------------------------------------------
 
-class USBSerial: public USBDriver, public Stream {
+class USBSerialBase: public USBDriver, public Stream {
 	public:
-
 
 	// FIXME: need different USBSerial, with bigger buffers for 480 Mbit & faster speed
 	enum { BUFFER_SIZE = 648 }; // must hold at least 6 max size packets, plus 2 extra bytes
 	enum { DEFAULT_WRITE_TIMEOUT = 3500};
-	USBSerial(USBHost &host) : txtimer(this) { init(); }
+
+	USBSerialBase(USBHost &host, uint32_t *big_buffer, uint16_t buffer_size, 
+		uint16_t min_pipe_rxtx, uint16_t max_pipe_rxtx) :
+			txtimer(this), 
+			_bigBuffer(big_buffer), 
+			_big_buffer_size(buffer_size), 
+			_min_rxtx(min_pipe_rxtx), 
+			_max_rxtx(max_pipe_rxtx) 
+		{ 
+
+			init(); 
+		}
+
 	void begin(uint32_t baud, uint32_t format=USBHOST_SERIAL_8N1);
 	void end(void);
 	uint32_t writeTimeout() {return write_timeout_;}
@@ -1360,6 +1438,8 @@ class USBSerial: public USBDriver, public Stream {
 	virtual size_t write(uint8_t c);
 	virtual void flush(void);
 
+	bool setDTR(bool fSet);
+	bool setRTS(bool fSet);
 	using Print::write;
 protected:
 	virtual bool claim(Device_t *device, int type, const uint8_t *descriptors, uint32_t len);
@@ -1381,7 +1461,12 @@ private:
 	Transfer_t mytransfers[7] __attribute__ ((aligned(32)));
 	strbuf_t mystring_bufs[1];
 	USBDriverTimer txtimer;
-	uint32_t bigbuffer[(BUFFER_SIZE+3)/4];
+	uint32_t *_bigBuffer;
+	uint16_t _big_buffer_size;
+	uint16_t  _min_rxtx;
+	uint16_t _max_rxtx;
+
+
 	setup_t setup;
 	uint8_t setupdata[16]; // 
 	uint32_t baudrate;
@@ -1408,17 +1493,41 @@ private:
 	uint8_t pl2303_v1;		// Which version do we have
 	uint8_t pl2303_v2;
 	uint8_t interface;
-	bool 	control_queued;	// Is there already a queued control messaged
+	uint8_t dtr_rts_;		// save logical state for the two of them. 
+	volatile bool 	control_queued;	// Is there already a queued control messaged
 	typedef enum { UNKNOWN=0, CDCACM, FTDI, PL2303, CH341, CP210X } sertype_t;
+
 	sertype_t sertype;
 
 	typedef struct {
 		uint16_t 	idVendor;
 		uint16_t 	idProduct;
 		sertype_t 	sertype;
+		int			claim_at_type;
 	} product_vendor_mapping_t;
 	static product_vendor_mapping_t pid_vid_mapping[];
 
+};
+
+class USBSerial : public USBSerialBase {
+public:
+	USBSerial(USBHost &host) :
+		// hard code the normal one to 1 and 64 bytes for most likely most are 64
+		USBSerialBase(host, bigbuffer, sizeof(bigbuffer), 1, 64) {};
+private:
+	enum { BUFFER_SIZE = 648 }; // must hold at least 6 max size packets, plus 2 extra bytes
+	uint32_t bigbuffer[(BUFFER_SIZE+3)/4];
+};
+
+class USBSerial_BigBuffer: public USBSerialBase {
+public:
+	// Default to larger than can be handled by other serial, but can overide
+	USBSerial_BigBuffer(USBHost &host, uint16_t min_rxtx=65) :
+		// hard code the normal one to 1 and 64 bytes for most likely most are 64
+		USBSerialBase(host, bigbuffer, sizeof(bigbuffer), min_rxtx, 512) {};
+private:
+	enum { BUFFER_SIZE = 4096 }; // must hold at least 6 max size packets, plus 2 extra bytes
+	uint32_t bigbuffer[(BUFFER_SIZE+3)/4];
 };
 
 //--------------------------------------------------------------------------
@@ -1675,6 +1784,68 @@ private:
 
 //--------------------------------------------------------------------------
 
+class USBSerialEmu : public USBHIDInput, public Stream {
+public:
+	USBSerialEmu(USBHost &host) { init(); }
+	uint32_t usage(void) {return usage_;}
+
+	// Stream stuff. 
+	uint32_t writeTimeout() {return write_timeout_;}
+	void writeTimeOut(uint32_t write_timeout) {write_timeout_ = write_timeout;} // Will not impact current ones.
+	virtual int available(void);
+	virtual int peek(void);
+	virtual int read(void);
+	virtual int availableForWrite();
+	virtual size_t write(uint8_t c);
+	virtual void flush(void);
+
+	using Print::write;
+
+
+protected:
+	virtual hidclaim_t claim_collection(USBHIDParser *driver, Device_t *dev, uint32_t topusage);
+	virtual bool hid_process_in_data(const Transfer_t *transfer);
+	virtual bool hid_process_out_data(const Transfer_t *transfer);
+	virtual void hid_input_begin(uint32_t topusage, uint32_t type, int lgmin, int lgmax);
+	virtual void hid_input_data(uint32_t usage, int32_t value);
+	virtual void hid_input_end();
+	virtual void disconnect_collection(Device_t *dev);
+	virtual void hid_timer_event(USBDriverTimer *whichTimer);
+
+	bool sendPacket();
+
+private:
+	void init();
+	USBHIDParser *driver_;
+	enum { MAX_PACKET_SIZE = 64 };
+	bool (*receiveCB)(uint32_t usage, const uint8_t *data, uint32_t len) = nullptr;
+	uint8_t collections_claimed = 0;
+	uint32_t usage_ = 0;
+
+	// We have max of 512 byte packets coming in.  How about enough room for 3+3
+	enum { RX_BUFFER_SIZE=1024, TX_BUFFER_SIZE = 512 };
+	enum { DEFAULT_WRITE_TIMEOUT = 3500};
+
+	uint8_t rx_buffer_[RX_BUFFER_SIZE];
+	uint8_t tx_buffer_[TX_BUFFER_SIZE];
+
+	volatile uint8_t tx_out_data_pending_ = 0;
+
+	volatile uint16_t rx_head_;// receive head
+	volatile uint16_t rx_tail_;// receive tail
+	volatile uint16_t tx_head_;
+	uint16_t rx_pipe_size_;// size of receive circular buffer
+	uint16_t tx_pipe_size_;// size of transmit circular buffer
+	uint32_t write_timeout_ = DEFAULT_WRITE_TIMEOUT;
+
+
+	// See if we can contribute transfers
+	Transfer_t mytransfers[2] __attribute__ ((aligned(32)));
+
+};
+
+//--------------------------------------------------------------------------
+
 class BluetoothController: public USBDriver {
 public:
 	static const uint8_t MAX_CONNECTIONS = 4;
@@ -1683,9 +1854,10 @@ public:
     uint16_t		connection_rxid_ = 0;
     uint16_t		control_dcid_ = 0x70;
     uint16_t		interrupt_dcid_ = 0x71;
+		uint16_t		sdp_dcid_ = 0x40;	
     uint16_t		interrupt_scid_;
     uint16_t		control_scid_;
-
+		uint16_t		sdp_scid_;
     uint8_t			device_bdaddr_[6];// remember devices address
     uint8_t			device_ps_repetion_mode_ ; // mode
     uint8_t			device_clock_offset_[2];
@@ -1708,7 +1880,7 @@ public:
 
 	// BUGBUG version to allow some of the controlled objects to call?
     enum {CONTROL_SCID=-1, INTERRUPT_SCID=-2};
-    void sendL2CapCommand(uint8_t* data, uint8_t nbytes, int channel = (int)0x0001);
+    void sendL2CapCommand(BTHIDInput *driver, uint8_t* data, uint8_t nbytes, int channel = (int)0x0001);
 
 protected:
 	virtual bool claim(Device_t *device, int type, const uint8_t *descriptors, uint32_t len);
@@ -1794,6 +1966,10 @@ private:
 
 	void setHIDProtocol(uint8_t protocol);
 	void handleHIDTHDRData(uint8_t *buffer);	// Pass the whole buffer...
+
+	uint8_t findConnectionByAddr(uint8_t *bd_addr);
+	uint8_t findConnectionByHandle(uint8_t handle);
+	uint8_t findConnectionByDriver(BTHIDInput *driver);
 	static BTHIDInput *available_bthid_drivers_list;
 
 
@@ -1827,6 +2003,141 @@ private:
 	} product_vendor_mapping_t;
 	static product_vendor_mapping_t pid_vid_mapping[];
 
+};
+
+class ADK: public USBDriver {
+public:
+	ADK(USBHost &host) { init(); }
+	bool ready();
+	void begin(char *adk_manufacturer, char *adk_model, char *adk_desc, char *adk_version, char *adk_uri, char *adk_serial);
+	void end();
+	int available(void);
+	int peek(void);
+	int read(void);
+	size_t write(size_t len, uint8_t *buf);
+protected:
+	virtual bool claim(Device_t *device, int type, const uint8_t *descriptors, uint32_t len);
+	virtual void disconnect();
+	virtual void control(const Transfer_t *transfer);
+	static void rx_callback(const Transfer_t *transfer);
+	static void tx_callback(const Transfer_t *transfer);
+	void rx_data(const Transfer_t *transfer);
+	void tx_data(const Transfer_t *transfer);
+	void init();
+	void rx_queue_packets(uint32_t head, uint32_t tail);
+	void sendStr(Device_t *dev, uint8_t index, char *str);
+private:
+	int state = 0;
+	Pipe_t *rxpipe;
+	Pipe_t *txpipe;
+	enum { MAX_PACKET_SIZE = 512 };
+	enum { RX_QUEUE_SIZE = 1024 }; // must be more than MAX_PACKET_SIZE
+	uint8_t rx_buffer[MAX_PACKET_SIZE];
+	uint8_t tx_buffer[MAX_PACKET_SIZE];
+	uint16_t rx_size;
+	uint16_t tx_size;
+	uint8_t rx_queue[RX_QUEUE_SIZE];
+	bool rx_packet_queued;
+	uint16_t rx_head;
+	uint16_t rx_tail;
+	uint8_t rx_ep;
+	uint8_t tx_ep;
+	char *manufacturer;
+	char *model;
+	char *desc;
+	char *version;
+	char *uri;
+	char *serial;
+	Pipe_t mypipes[3] __attribute__ ((aligned(32)));
+	Transfer_t mytransfers[7] __attribute__ ((aligned(32)));
+};
+
+//--------------------------------------------------------------------------
+class msController : public USBDriver {
+public:
+	msController(USBHost &host) { init(); }
+	msController(USBHost *host) { init(); }
+
+	msSCSICapacity_t msCapacity;
+	msInquiryResponse_t msInquiry;
+	msRequestSenseResponse_t msSense;
+	msDriveInfo_t msDriveInfo;
+
+	bool mscTransferComplete = false;
+	uint8_t mscInit(void);
+	void msReset(void);
+	uint8_t msGetMaxLun(void);
+	void msCurrentLun(uint8_t lun) {currentLUN = lun;}
+	uint8_t msCurrentLun() {return currentLUN;}
+	bool available() { delay(0); return deviceAvailable; }
+	uint8_t checkConnectedInitialized(void);
+	uint16_t getIDVendor() {return idVendor; }
+	uint16_t getIDProduct() {return idProduct; }
+	uint8_t getHubNumber() { return hubNumber; }
+	uint8_t getHubPort() { return hubPort; }
+	uint8_t getDeviceAddress() { return deviceAddress; }
+	uint8_t WaitMediaReady();
+	uint8_t msTestReady();
+	uint8_t msReportLUNs(uint8_t *Buffer);
+	uint8_t msStartStopUnit(uint8_t mode);
+	uint8_t msReadDeviceCapacity(msSCSICapacity_t * const Capacity);
+	uint8_t msDeviceInquiry(msInquiryResponse_t * const Inquiry);
+	uint8_t msProcessError(uint8_t msStatus);
+	uint8_t msRequestSense(msRequestSenseResponse_t * const Sense);
+	uint8_t msRequestSense(void *Sense);
+
+	uint8_t msReadBlocks(const uint32_t BlockAddress, const uint16_t Blocks,
+						 const uint16_t BlockSize, void * sectorBuffer);
+	uint8_t msReadSectorsWithCB(const uint32_t BlockAddress, const uint16_t Blocks, void (*callback)(uint32_t token, uint8_t* data), uint32_t token);
+	uint8_t msWriteBlocks(const uint32_t BlockAddress, const uint16_t Blocks,
+                        const uint16_t BlockSize,	const void * sectorBuffer);
+protected:
+	virtual bool claim(Device_t *device, int type, const uint8_t *descriptors, uint32_t len);
+	virtual void control(const Transfer_t *transfer);
+	virtual void disconnect();
+	static void callbackIn(const Transfer_t *transfer);
+	static void callbackOut(const Transfer_t *transfer);
+	void new_dataIn(const Transfer_t *transfer);
+	void new_dataOut(const Transfer_t *transfer);
+	void init();
+	uint8_t msDoCommand(msCommandBlockWrapper_t *CBW, void *buffer);
+	uint8_t msGetCSW(void);
+private:
+	Pipe_t mypipes[3] __attribute__ ((aligned(32)));
+	Transfer_t mytransfers[7] __attribute__ ((aligned(32)));
+	strbuf_t mystring_bufs[1];
+	uint32_t packetSizeIn;
+	uint32_t packetSizeOut;
+	Pipe_t *datapipeIn;
+	Pipe_t *datapipeOut;
+	uint8_t bInterfaceNumber;
+	uint32_t endpointIn = 0;
+	uint32_t endpointOut = 0;
+	setup_t setup;
+	uint8_t report[8];
+	uint8_t maxLUN = 0;
+	uint8_t currentLUN = 0;
+//	msSCSICapacity_t msCapacity;
+//	msInquiryResponse_t msInquiry;
+//	msRequestSenseResponse_t msSense;
+	uint16_t idVendor = 0;
+	uint16_t idProduct = 0;
+	uint8_t hubNumber = 0;
+	uint8_t hubPort = 0;
+	uint8_t deviceAddress = 0;
+	volatile bool msOutCompleted = false;
+	volatile bool msInCompleted = false;
+	volatile bool msControlCompleted = false;
+	uint32_t CBWTag = 0;
+	bool deviceAvailable = false;
+	// experiment with transfers with callbacks.
+	void (*_read_sectors_callback)(uint32_t token, uint8_t* data) = nullptr;
+	uint32_t _read_sectors_token = 0;
+	uint16_t _read_sectors_remaining = 0;
+	enum {READ_CALLBACK_TIMEOUT_MS=250};
+    elapsedMillis _emlastRead;
+	uint8_t _read_sector_buffer1[512];
+	uint8_t _read_sector_buffer2[512];
 };
 
 #endif
