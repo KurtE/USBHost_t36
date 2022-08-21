@@ -104,7 +104,11 @@ static const vid_pid_t keyboard_forceBootMode[] = {
 //============================================================
 // Items in the list allow HID Parser to claim
 //============================================================
+bool KeyboardController::s_forceHIDMode = false;
+
 static const vid_pid_t keyboard_use_hid_mode[] = {
+	{0x04D9, 0},
+
 	{0x046D, 0xC547}
 };
 
@@ -115,6 +119,7 @@ static const vid_pid_t keyboard_use_hid_mode[] = {
 
 bool KeyboardController::processUsingHID(uint16_t vid, uint16_t pid)
 {
+	if (s_forceHIDMode) return true;
 	for (uint8_t i = 0; i < (sizeof(keyboard_use_hid_mode) / sizeof(keyboard_use_hid_mode[0])); i++) {
 		if (keyboard_use_hid_mode[i].idVendor == vid) {
 			if ((keyboard_use_hid_mode[i].idProduct == 0 ) || (keyboard_use_hid_mode[i].idProduct == pid)) return true;
@@ -140,11 +145,18 @@ void KeyboardController::init()
 bool KeyboardController::claim(Device_t *dev, int type, const uint8_t *descriptors, uint32_t len)
 {
 	println("KeyboardController claim this=", (uint32_t)this, HEX);
+	USBHDBGSerial.printf("KeyboardController::Claim %p\n", this);
 
 	// only claim at interface level
 	if (type != 1) return false;
 	if (len < 9+9+7) return false;
 	print_hexbytes(descriptors, len);
+
+	// If this vid/pid is set to use HID, then bail
+	if (processUsingHID(dev->idVendor, dev->idProduct)) {
+		USBHDBGSerial.printf("\t$$ Wants HID mode\n");
+		return false;
+	}
 
 	uint32_t numendpoint = descriptors[4];
 	if (numendpoint < 1) return false;
@@ -166,9 +178,6 @@ bool KeyboardController::claim(Device_t *dev, int type, const uint8_t *descripto
 	if ((size < 8) || (size > 64)) {
 		return false; // Keyboard Boot Protocol is 8 bytes, but maybe others have longer... 
 	}
-
-	// If this vid/pid is set to use HID, then bail
-	if (processUsingHID(dev->idVendor, dev->idProduct))  return false;
 
 #ifdef USBHS_KEYBOARD_INTERVAL 
 	uint32_t interval = USBHS_KEYBOARD_INTERVAL;
@@ -200,6 +209,7 @@ bool KeyboardController::claim(Device_t *dev, int type, const uint8_t *descripto
 	}
 	queue_Control_Transfer(dev, &setup, NULL, this);
 	control_queued = true;
+	USBHDBGSerial.printf("\t$$ claimed interface\n");
 	return true;
 }
 
@@ -336,8 +346,9 @@ void KeyboardController::key_press(uint32_t mod, uint32_t key)
 {
 	// TODO: queue events, perform callback from Task
 	println("  press, key=", key);
-	modifiers = mod;
-	keyOEM = key;
+	USBHDBGSerial.printf("key_press: %x %x\n", mod, key);
+	modifiers_ = mod;
+	keyOEM_ = key;
 	keyCode = convert_to_unicode(mod, key);
 	println("  unicode = ", keyCode);
 	if (keyPressedFunction) {
@@ -351,8 +362,8 @@ void KeyboardController::key_release(uint32_t mod, uint32_t key)
 {
 	// TODO: queue events, perform callback from Task
 	println("  release, key=", key);
-	modifiers = mod;
-	keyOEM = key;
+	modifiers_ = mod;
+	keyOEM_ = key;
 
 	// Look for modifier keys
 	if (key == M(KEY_NUM_LOCK)) {
@@ -450,20 +461,30 @@ void KeyboardController::updateLEDS() {
 #define TOPUSAGE_SYS_CONTROL 	0x10080
 #define TOPUSAGE_CONSUMER_CONTROL	0x0c0001
 
+#define TOPUSAGE_KEYBOARD 0X10006
+
 hidclaim_t KeyboardController::claim_collection(USBHIDParser *driver, Device_t *dev, uint32_t topusage)
 {
 	// Lets try to claim a few specific Keyboard related collection/reports
-	//USBHDBGSerial.printf("KBH Claim %x\n", topusage);
-	if ((topusage != TOPUSAGE_SYS_CONTROL) 
-		&& (topusage != TOPUSAGE_CONSUMER_CONTROL)
-		) return CLAIM_NO;
+	bool use_hid_mode = processUsingHID(dev->idVendor, dev->idProduct);
+	USBHDBGSerial.printf("KeyboardController::claim_collection %p %x\n", this, topusage);
+	if (topusage == TOPUSAGE_KEYBOARD) {
+		if (!use_hid_mode)  return CLAIM_NO;
+	} else 	if ((topusage != TOPUSAGE_SYS_CONTROL) 
+			 && (topusage != TOPUSAGE_CONSUMER_CONTROL) )
+		return CLAIM_NO;
+
 	// only claim from one physical device
-	//USBHDBGSerial.println("KeyboardController claim collection");
 	// Lets only claim if this is the same device as claimed Keyboard... 
-	if (dev != device) return CLAIM_NO;
+	USBHDBGSerial.printf("\tdev=%p device=%p mydevice=%p\n", dev, device, mydevice);
+	if (use_hid_mode ) {
+		if (device != NULL) return CLAIM_NO;
+	} else if (dev != device) return CLAIM_NO;
+
 	if (mydevice != NULL && dev != mydevice) return CLAIM_NO;
 	mydevice = dev;
 	collections_claimed_++;
+	USBHDBGSerial.printf("KeyboardController claim collection\n");
 	return CLAIM_REPORT;
 }
 
@@ -487,6 +508,9 @@ void KeyboardController::hid_input_data(uint32_t usage, int32_t value)
 	// Hack ignore 0xff00 high words as these are user values... 
 	if ((usage & 0xffff0000) == 0xff000000) return; 
 	//USBHDBGSerial.printf("KeyboardController: topusage= %x usage=%X, value=%d\n", topusage_, usage, value);
+	// If this is the TOPUSAGE_KEYBOARD do in it's own function
+	if (process_hid_keyboard_data(usage, value))
+		return;
 
 	// See if the value is in our keys_down list
 	usage &= 0xffff;		// only keep the actual key
@@ -521,6 +545,64 @@ void KeyboardController::hid_input_data(uint32_t usage, int32_t value)
 	if (count_keys_down_ < MAX_KEYS_DOWN) {
 		keys_down[count_keys_down_++] = usage;
 	}
+}
+
+bool KeyboardController::process_hid_keyboard_data(uint32_t usage, int32_t value)
+{
+	print("process_hid_keyboard_data Usage: ", usage, HEX);
+	println(" value: ", value);
+
+	if ((topusage_ & 0xffff0000) != (TOPUSAGE_KEYBOARD & 0xffff0000)) return false;
+	// Lets first process modifier keys...
+	// usage=700E0, value=0 (Left Control)
+	// usage=700E1, value=0 (Left Shift)
+	// usage=700E2, value=0 (Left Alt)
+	// usage=700E3, value=0 (Left GUI)
+	// usage=700E4, value=0 (Right Control)
+	// usage=700E5, value=0 (Right Shift)
+	// usage=700E6, value=0 (Right Alt)
+	// usage=700E7, value=0 (Right GUI)
+	if ((usage >= 0x700E0) && (usage <= 0x700E7)) {
+		usage &= 7; 
+		uint8_t keybit = 1 << usage;
+		if (value) {
+			if (!(modifiers_ & keybit))  {
+				if (rawKeyPressedFunction) rawKeyPressedFunction(103 + usage);
+				modifiers_ |= keybit;
+			}
+
+		} else {
+			if (modifiers_ & keybit)  {
+				if (rawKeyReleasedFunction) rawKeyReleasedFunction(103 + usage);
+				modifiers_ &= ~keybit;
+			}
+		}
+		return true;
+	}
+
+	// normal keys to be processed here. 
+	if ((usage >= 0x70000) && (usage <= 0x70073)) {
+		usage &= 0xff; // only use the low byte
+		uint8_t key_byte_index = usage >> 3; //which byte in key_states.
+		uint8_t key_bit_mask = 1 << (usage & 0x7);
+
+		if (value) {
+			if (!(key_states[key_byte_index] & key_bit_mask))  {
+				key_press(modifiers_, usage);
+				if (rawKeyPressedFunction) rawKeyPressedFunction(usage);
+				key_states[key_byte_index] |= key_bit_mask;
+			}
+
+		} else {
+			if (key_states[key_byte_index] & key_bit_mask)  {
+				key_release(modifiers_, usage);
+				if (rawKeyReleasedFunction) rawKeyReleasedFunction(usage);
+				key_states[key_byte_index] &= ~key_bit_mask;
+			}
+		}
+		return true;
+	}
+	return false;
 }
 
 void KeyboardController::hid_input_end()

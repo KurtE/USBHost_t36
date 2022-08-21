@@ -386,11 +386,11 @@ void HIDDumpController::printUsageInfo(uint8_t usage_page, uint16_t usage) {
         case 0xE0: Serial.print("(Left Control)"); break;
         case 0xE1: Serial.print("(Left Shift)"); break;
         case 0xE2: Serial.print("(Left Alt)"); break;
-        case 0xE3: Serial.print("(Left)"); break;
+        case 0xE3: Serial.print("(Left GUI)"); break;
         case 0xE4: Serial.print("(Right Control)"); break;
         case 0xE5: Serial.print("(Right Shift)"); break;
         case 0xE6: Serial.print("(Right Alt)"); break;
-        case 0xE7: Serial.print("(Right)"); break;
+        case 0xE7: Serial.print("(Right GUI)"); break;
         default:
           Serial.printf("(Keycode %u)", usage);
           break;

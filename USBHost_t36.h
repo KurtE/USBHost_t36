@@ -753,11 +753,18 @@ public:
 	const uint8_t *product();
 	const uint8_t *serialNumber();
 
-	operator bool() { return ((device != nullptr) || (btdevice != nullptr)); }
+	// These methods are for all keyboard objects and if set true
+	// we will process the keyboard input using the HID parser.
+	// If not and VID:PID not in list of ones to force
+	// we weill process assuming the device outputs in standard keyboard boot format
+	static void allwaysUseHIDMode(bool hidMode) {s_forceHIDMode = hidMode;}
+	static bool allwaysUseHIDMode() {return s_forceHIDMode;}
+
+	operator bool() { return ((device != nullptr) || (btdevice != nullptr) || (mydevice != nullptr)); }
 	// Main boot keyboard functions. 
 	uint16_t getKey() { return keyCode; }
-	uint8_t  getModifiers() { return modifiers; }
-	uint8_t  getOemKey() { return keyOEM; }
+	uint8_t  getModifiers() { return modifiers_; }
+	uint8_t  getOemKey() { return keyOEM_; }
 	void     attachPress(void (*f)(int unicode)) { keyPressedFunction = f; }
 	void     attachRelease(void (*f)(int unicode)) { keyReleasedFunction = f; }
 	void     attachRawPress(void (*f)(uint8_t keycode)) { rawKeyPressedFunction = f; }
@@ -807,17 +814,24 @@ private:
 	uint16_t convert_to_unicode(uint32_t mod, uint32_t key);
 	void key_press(uint32_t mod, uint32_t key);
 	void key_release(uint32_t mod, uint32_t key);
+	bool process_hid_keyboard_data(uint32_t usage, int32_t value);
 	void (*keyPressedFunction)(int unicode);
 	void (*keyReleasedFunction)(int unicode);
 	void (*rawKeyPressedFunction)(uint8_t keycode) = nullptr;
 	void (*rawKeyReleasedFunction)(uint8_t keycode) = nullptr;
 	Pipe_t *datapipe;
 	setup_t setup;
-	uint8_t report[8];
+	union {
+		struct {
+			uint8_t report[8];
+			uint8_t prev_report[8];
+		};
+		uint8_t key_states[16]; 
+	};
 	uint16_t keyCode;
-	uint8_t modifiers;
-	uint8_t keyOEM;
-	uint8_t prev_report[8];
+	uint8_t modifiers_ = 0;
+	uint8_t keyOEM_;
+
 	KBDLeds_t leds_ = {0};
 	Pipe_t mypipes[2] __attribute__ ((aligned(32)));
 	Transfer_t mytransfers[4] __attribute__ ((aligned(32)));
@@ -833,7 +847,8 @@ private:
 	uint8_t count_keys_down_ = 0;
 	uint16_t keys_down[MAX_KEYS_DOWN];
 	bool 	force_boot_protocol;  // User or VID/PID said force boot protocol?
-	bool control_queued;
+	bool control_queued = false;
+	static bool s_forceHIDMode;
 };
 
 

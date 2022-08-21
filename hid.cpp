@@ -220,7 +220,7 @@ void USBHIDParser::in_data(const Transfer_t *transfer)
 	/*USBHDBGSerial.printf("HID: ");
 	uint8_t *pb = (uint8_t*)transfer->buffer;
 	for (uint8_t i = 0; i < transfer->length; i++) {
-		USBHDBGSerial.printf("%x ",pb[i]);
+		USBHDBGSerial.printf("%02x ",pb[i]);
 	}
 	USBHDBGSerial.printf("\n"); */
 
