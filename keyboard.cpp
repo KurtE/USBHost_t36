@@ -343,7 +343,8 @@ void KeyboardController::process_boot_keyboard_format(const uint8_t *report, boo
 hidclaim_t KeyboardController::claim_collection(USBHIDParser *driver, Device_t *dev, uint32_t topusage)
 {
 	// Lets try to claim a few specific Keyboard related collection/reports
-	USBHDBGSerial.printf("KeyboardController::claim_collection %p %p %p %x\n", this, driver, dev, topusage);
+	USBHDBGSerial.printf("KeyboardController::claim_collection(%p) Driver:%p(%u %u) Dev:%p Top:%x\n", this, driver, 
+		driver->interfaceSubClass(), driver->interfaceProtocol(), dev, topusage);
 	if ((topusage != TOPUSAGE_KEYBOARD) 
 			 && (topusage != TOPUSAGE_SYS_CONTROL) 
 			 && (topusage != TOPUSAGE_CONSUMER_CONTROL) )
@@ -351,7 +352,7 @@ hidclaim_t KeyboardController::claim_collection(USBHIDParser *driver, Device_t *
 
 	// only claim from one physical device
 	// Lets only claim if this is the same device as claimed Keyboard... 
-	USBHDBGSerial.printf("\tdev=%p mydevice=%p\n", dev, mydevice);
+	//USBHDBGSerial.printf("\tdev=%p mydevice=%p\n", dev, mydevice);
 	if (mydevice != NULL && dev != mydevice) return CLAIM_NO;
 
 	// keep all three drivers:

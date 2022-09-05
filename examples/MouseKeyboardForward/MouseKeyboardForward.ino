@@ -40,14 +40,17 @@ void setup() {
   pinMode(13, OUTPUT);
   Serial.begin(1000000);
   Serial.println("\n\nUSB Mouse and Keyboard forwarder");
-  myusb.begin();
 #ifdef SHOW_KEYBOARD_DATA
   while (!Serial && millis() < 2000)
     ;  // wait for Arduino Serial Monitor
   Serial.println("\n\nUSB Mouse and Keyboard forwarder");
   if (CrashReport) Serial.print(CrashReport);
+#endif
+
+  myusb.begin();
 
   // Only needed to display...
+#ifdef SHOW_KEYBOARD_DATA
   keyboard1.attachPress(OnPress1);
   keyboard2.attachPress(OnPress2);
 #endif

@@ -147,6 +147,9 @@ bool USBHIDParser::claim(Device_t *dev, int type, const uint8_t *descriptors, ui
 	}
 	// request the HID report descriptor
 	bInterfaceNumber = descriptors[2];	// save away the interface number; 
+	bInterfaceSubClass = descriptors[6]; // likewise sub type and protocol.
+	bInterfaceProtocol = descriptors[7];
+	
 	mk_setup(setup, 0x81, 6, 0x2200, descriptors[2], descsize); // get report desc
 	queue_Control_Transfer(dev, &setup, descriptor, this);
 	return true;

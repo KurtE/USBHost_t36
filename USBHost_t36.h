@@ -677,6 +677,8 @@ public:
 	// 
 	uint16_t inSize(void) {return in_size;}
 	uint16_t outSize(void) {return out_size;}
+	uint8_t interfaceSubClass(void) { return bInterfaceSubClass; }
+	uint8_t interfaceProtocol(void) { return bInterfaceProtocol; }
 	void startTimer(uint32_t microseconds) {hidTimer.start(microseconds);}
 	void stopTimer() {hidTimer.stop();}
 	uint8_t interfaceNumber() { return bInterfaceNumber;}
@@ -710,6 +712,8 @@ private:
 	USBHIDInput *topusage_drivers[TOPUSAGE_LIST_LEN];
 	uint16_t in_size;
 	uint16_t out_size;
+	uint8_t bInterfaceSubClass;
+	uint8_t bInterfaceProtocol;
 	setup_t setup;
 	uint8_t descriptor[800];
 	uint8_t report[64];

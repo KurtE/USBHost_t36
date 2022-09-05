@@ -24,13 +24,15 @@ uint8_t keyboard_last_leds = 0;
 
 void setup()
 {
-  myusb.begin();
 #ifdef SHOW_KEYBOARD_DATA
   while (!Serial) ; // wait for Arduino Serial Monitor
-  Serial.println("\n\nUSB Host Testing");
+  Serial.println("\n\nUSB Host Keyboard forward and Testing");
   Serial.println(sizeof(USBHub), DEC);
+#endif
+  myusb.begin();
 
   // Only needed to display...
+#ifdef SHOW_KEYBOARD_DATA
   keyboard1.attachPress(OnPress);
 #endif
   keyboard1.attachRawPress(OnRawPress);
