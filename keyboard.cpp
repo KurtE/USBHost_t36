@@ -288,9 +288,9 @@ void KeyboardController::updateLEDS() {
 	}
 }
 
-void KeyboardController::process_boot_keyboard_format(const uint8_t *report)
+void KeyboardController::process_boot_keyboard_format(const uint8_t *report, bool process_mod_keys)
 {
-	print("** Process boot keyboard format **\n");
+	//Serial.printf("** Process boot keyboard format **\n");
 	for (int i=2; i < 8; i++) {
 		uint32_t key = prev_report_[i];
 		if (key >= 4 && !contains(key, report)) {
@@ -300,7 +300,7 @@ void KeyboardController::process_boot_keyboard_format(const uint8_t *report)
 			}
 		}
 	}
-	if (rawKeyReleasedFunction) {
+	if (process_mod_keys && rawKeyReleasedFunction) {
 		// each modifier key is represented by a bit in the first byte
 		for (int i = 0; i < 8; ++i)
 		{
@@ -319,7 +319,7 @@ void KeyboardController::process_boot_keyboard_format(const uint8_t *report)
 			}
 		}
 	}
-	if (rawKeyPressedFunction) {
+	if (process_mod_keys && rawKeyPressedFunction) {
 		for (int i = 0; i < 8; ++i)
 		{
 			uint8_t keybit = 1 << i;
@@ -374,18 +374,19 @@ void KeyboardController::disconnect_collection(Device_t *dev)
 
 bool KeyboardController::hid_process_in_data(const Transfer_t *transfer)
 {
-	uint16_t len = transfer->length;
 	const uint8_t *buffer = (const uint8_t *)transfer->buffer;
+	/*
+	uint16_t len = transfer->length;
 	const uint8_t *p = buffer;
-	//Serial.printf("HPID(%p, %u):", transfer->driver, len);
-	//  if (len > 32) len = 32;
-	//while (len--) Serial.printf(" %02X", *p++);
-	//Serial.printf("\n");
-
+	Serial.printf("HPID(%p, %u):", transfer->driver, len);
+	  if (len > 32) len = 32;
+	while (len--) Serial.printf(" %02X", *p++);
+	Serial.printf("\n");
+	*/
 	// Probably need to do some more checking of the data, but
 	// first pass if length == 8 assume boot format:
 	if (transfer->length == 8) {
-		process_boot_keyboard_format(buffer);
+		process_boot_keyboard_format(buffer, true);
 		return true;
 	}
 
@@ -397,6 +398,8 @@ void KeyboardController::hid_input_begin(uint32_t topusage, uint32_t type, int l
 {
 	//USBHDBGSerial.printf("KPC:hid_input_begin TUSE: %x TYPE: %x Range:%x %x\n", topusage, type, lgmin, lgmax);
 	topusage_ = topusage;	// remember which report we are processing. 
+	topusage_type_ = type;
+	topusage_index_ = 2;  // hack we ignore first two bytes	
 	hid_input_begin_ = true;
 	hid_input_data_ = false;
 }
@@ -449,6 +452,7 @@ bool KeyboardController::process_hid_keyboard_data(uint32_t usage, int32_t value
 {
 	print("process_hid_keyboard_data Usage: ", usage, HEX);
 	println(" value: ", value);
+	//Serial.printf("process_hid_keyboard_data %x=%d\n", usage, value);
 
 	if ((topusage_ & 0xffff0000) != (TOPUSAGE_KEYBOARD & 0xffff0000)) return false;
 	// Lets first process modifier keys...
@@ -478,24 +482,36 @@ bool KeyboardController::process_hid_keyboard_data(uint32_t usage, int32_t value
 		return true;
 	}
 
+
 	// normal keys to be processed here. 
+	// but two ways: for N key we receive an index per item
+	// with Boot, we get an array of these items:
+
 	if ((usage >= 0x70000) && (usage <= 0x70073)) {
 		usage &= 0xff; // only use the low byte
-		uint8_t key_byte_index = usage >> 3; //which byte in key_states_.
-		uint8_t key_bit_mask = 1 << (usage & 0x7);
+		if (topusage_type_ & 0x2) {
+			//normal variable - so use bitindex array to figure out what is new and what is old
+			uint8_t key_byte_index = usage >> 3; //which byte in key_states_.
+			uint8_t key_bit_mask = 1 << (usage & 0x7);
 
-		if (value) {
-			if (!(key_states_[key_byte_index] & key_bit_mask))  {
-				key_press(modifiers_, usage);
-				if (rawKeyPressedFunction) rawKeyPressedFunction(usage);
-				key_states_[key_byte_index] |= key_bit_mask;
+			if (value) {
+				if (!(key_states_[key_byte_index] & key_bit_mask))  {
+					key_press(modifiers_, usage);
+					if (rawKeyPressedFunction) rawKeyPressedFunction(usage);
+					key_states_[key_byte_index] |= key_bit_mask;
+				}
+
+			} else {
+				if (key_states_[key_byte_index] & key_bit_mask)  {
+					key_release(modifiers_, usage);
+					if (rawKeyReleasedFunction) rawKeyReleasedFunction(usage);
+					key_states_[key_byte_index] &= ~key_bit_mask;
+				}
 			}
-
 		} else {
-			if (key_states_[key_byte_index] & key_bit_mask)  {
-				key_release(modifiers_, usage);
-				if (rawKeyReleasedFunction) rawKeyReleasedFunction(usage);
-				key_states_[key_byte_index] &= ~key_bit_mask;
+			// So array, We only see what keys are down.
+			if (topusage_index_ < 8) {
+				report_[topusage_index_++] = usage;
 			}
 		}
 		return true;
@@ -505,11 +521,13 @@ bool KeyboardController::process_hid_keyboard_data(uint32_t usage, int32_t value
 
 void KeyboardController::hid_input_end()
 {
-	//USBHDBGSerial.println("KPC:hid_input_end");
+	//USBHDBGSerial.printf("KPC:hid_input_end %u %u\n", hid_input_begin_, hid_input_data_);
 	if (hid_input_begin_) {
-
-		// See if we received any data from parser if not, assume all keys released... 
-		if (!hid_input_data_ ) {
+		if (((topusage_type_ & 0x2) == 0) && (topusage_index_ > 2)) {
+			// we have boot data.
+			process_boot_keyboard_format(report_, false);
+		}
+		else if (!hid_input_data_ ) {
 			if (extrasKeyReleasedFunction) {
 				while (count_keys_down_) {
 					count_keys_down_--;

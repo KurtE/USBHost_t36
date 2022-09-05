@@ -38,8 +38,8 @@ uint8_t keyboard_last_leds2 = 0;
 void setup() {
   delay(250);
   pinMode(13, OUTPUT);
-  Serial1.begin(1000000);
-  Serial1.println("\n\nUSB Mouse and Keyboard forwarder");
+  Serial.begin(1000000);
+  Serial.println("\n\nUSB Mouse and Keyboard forwarder");
   myusb.begin();
 #ifdef SHOW_KEYBOARD_DATA
   while (!Serial && millis() < 2000)

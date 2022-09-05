@@ -795,7 +795,7 @@ protected:	// HID functions for extra keyboard data.
 	virtual void hid_input_end();
 	virtual void disconnect_collection(Device_t *dev);
 	virtual bool hid_process_in_data(const Transfer_t *transfer);
-	void process_boot_keyboard_format(const uint8_t *report);
+	void process_boot_keyboard_format(const uint8_t *report, bool process_mod_keys);
 
 #ifdef USBHOST_PRINT_DEBUG
 	static void print_(const Transfer_t *transfer);
@@ -901,9 +901,12 @@ private:
 	void (*extrasKeyPressedFunction)(uint32_t top, uint16_t code);
 	void (*extrasKeyReleasedFunction)(uint32_t top, uint16_t code);
 	uint32_t topusage_ = 0;					// What top report am I processing?
+	uint32_t topusage_type_ = 0;
+	uint32_t topusage_index_ = 0;	
 	uint8_t collections_claimed_ = 0;
 	volatile bool hid_input_begin_ = false;
 	volatile bool hid_input_data_ = false; 	// did we receive any valid data with report?
+
 	uint8_t count_keys_down_ = 0;
 	uint16_t keys_down[MAX_KEYS_DOWN];
 	bool 	force_boot_protocol;  // User or VID/PID said force boot protocol?
