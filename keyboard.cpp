@@ -290,7 +290,7 @@ void KeyboardController::updateLEDS() {
 
 void KeyboardController::process_boot_keyboard_format(const uint8_t *report, bool process_mod_keys)
 {
-	//Serial.printf("** Process boot keyboard format **\n");
+	//USBHDBGSerial.printf("** Process boot keyboard format **\n");
 	for (int i=2; i < 8; i++) {
 		uint32_t key = prev_report_[i];
 		if (key >= 4 && !contains(key, report)) {
@@ -356,7 +356,12 @@ hidclaim_t KeyboardController::claim_collection(USBHIDParser *driver, Device_t *
 	if (mydevice != NULL && dev != mydevice) return CLAIM_NO;
 
 	// keep all three drivers:
-	if (topusage == TOPUSAGE_KEYBOARD) driver_[0] = driver;
+	if (topusage == TOPUSAGE_KEYBOARD) {
+		driver_[0] = driver;
+		USBHDBGSerial.printf("\t$$Send SET_IDLE\n");
+      	driver_[0]->sendControlPacket(0x21, 10, 0, 0, 0, nullptr); //10=SET_IDLE
+
+	}
 	else if (topusage == TOPUSAGE_SYS_CONTROL) driver_[1] = driver;
 	else driver_[2] = driver;
 	mydevice = dev;
@@ -379,10 +384,10 @@ bool KeyboardController::hid_process_in_data(const Transfer_t *transfer)
 	/*
 	uint16_t len = transfer->length;
 	const uint8_t *p = buffer;
-	Serial.printf("HPID(%p, %u):", transfer->driver, len);
+	USBHDBGSerial.printf("HPID(%p, %u):", transfer->driver, len);
 	  if (len > 32) len = 32;
-	while (len--) Serial.printf(" %02X", *p++);
-	Serial.printf("\n");
+	while (len--) USBHDBGSerial.printf(" %02X", *p++);
+	USBHDBGSerial.printf("\n");
 	*/
 	// Probably need to do some more checking of the data, but
 	// first pass if length == 8 assume boot format:
@@ -453,7 +458,7 @@ bool KeyboardController::process_hid_keyboard_data(uint32_t usage, int32_t value
 {
 	print("process_hid_keyboard_data Usage: ", usage, HEX);
 	println(" value: ", value);
-	//Serial.printf("process_hid_keyboard_data %x=%d\n", usage, value);
+	//USBHDBGSerial.printf("process_hid_keyboard_data %x=%d\n", usage, value);
 
 	if ((topusage_ & 0xffff0000) != (TOPUSAGE_KEYBOARD & 0xffff0000)) return false;
 	// Lets first process modifier keys...
