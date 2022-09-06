@@ -208,7 +208,7 @@ void USBDrive::disconnect()
 	println("Device Disconnected...");
 	msDriveInfo.connected = false;
 	msDriveInfo.initialized = false;
-	memset(&msDriveInfo, 0, sizeof(msDriveInfo_t));
+	memset((void*)&msDriveInfo, 0, sizeof(msDriveInfo_t));
 
 #ifdef DBGprint
 	print("   connected ");

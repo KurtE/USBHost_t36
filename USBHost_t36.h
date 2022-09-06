@@ -2476,8 +2476,9 @@ public:
 	void init();
 
 	operator bool() {
-		Device_t *dev = *(Device_t * volatile *)&device;
-		return dev != nullptr;
+		//Device_t *dev = *(Device_t * volatile *)&device;
+		//return dev != nullptr;
+		return device != nullptr;
 	}
 	bool changed() {return changed_;}
 	void changed(bool fChanged) {changed_ = fChanged;}
