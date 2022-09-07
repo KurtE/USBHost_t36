@@ -2476,9 +2476,10 @@ public:
 	void init();
 
 	operator bool() {
-		//Device_t *dev = *(Device_t * volatile *)&device;
-		//return dev != nullptr;
-		return device != nullptr;
+		// use of volatile prevents compiler from optimizing away
+		// re-reading the pointer if program repeated checks bool()
+		USBDrive *dev = *(USBDrive * volatile *)&device;
+		return dev != nullptr;
 	}
 	bool changed() {return changed_;}
 	void changed(bool fChanged) {changed_ = fChanged;}
