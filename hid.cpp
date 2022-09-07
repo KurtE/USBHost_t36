@@ -483,6 +483,8 @@ void USBHIDParser::parse(uint16_t type_and_report_id, const uint8_t *data, uint3
 	uint8_t collection_level = 0;
 	uint16_t usage[USAGE_LIST_LEN] = {0, 0};
 	uint8_t usage_count = 0;
+	uint8_t usage_min_max_count = 0;
+	uint8_t usage_min_max_mask = 0;
 	uint8_t report_id = 0;
 	uint16_t report_size = 0;
 	uint16_t report_count = 0;
@@ -544,12 +546,31 @@ void USBHIDParser::parse(uint16_t type_and_report_id, const uint8_t *data, uint3
 			}
 			break;
 		  case 0x18: // Usage Minimum (local)
-			usage[0] = val;
-			usage_count = 255;
+		  	// Note: Found a report with multiple min/max
+		  	if (usage_count != 255) {
+				usage_count = 255;
+			  	usage_min_max_count = 0;
+				usage_min_max_mask = 0;
+			}
+			usage[usage_min_max_count * 2] = val;
+			usage_min_max_mask |= 1;
+			if (usage_min_max_mask == 3) {
+		  		usage_min_max_count++;
+				usage_min_max_mask = 0;					
+		  	}
 			break;
 		  case 0x28: // Usage Maximum (local)
-			usage[1] = val;
-			usage_count = 255;
+		  	if (usage_count != 255) {
+				usage_count = 255;
+			  	usage_min_max_count = 0;
+				usage_min_max_mask = 0;
+			}
+			usage[usage_min_max_count * 2 + 1] = val;
+			usage_min_max_mask |= 2;
+			if (usage_min_max_mask == 3) {
+		  		usage_min_max_count++;
+				usage_min_max_mask = 0;					
+		  	}
 			break;
 		  case 0xA0: // Collection
 			if (collection_level == 0) {
@@ -590,6 +611,8 @@ void USBHIDParser::parse(uint16_t type_and_report_id, const uint8_t *data, uint3
 				println("       max=  ", logical_max);
 				println("       reportcount=", report_count);
 				println("       usage count=", usage_count);
+				println("       usage min max count=", usage_min_max_count);
+
 				driver->hid_input_begin(topusage, val, logical_min, logical_max);
 				println("Input, total bits=", report_count * report_size);
 				if ((val & 2)) {
@@ -597,6 +620,7 @@ void USBHIDParser::parse(uint16_t type_and_report_id, const uint8_t *data, uint3
 					uint32_t uindex = 0;
 					uint32_t uindex_max = 0xffff;	// assume no MAX
 					bool uminmax = false;
+					uint8_t uminmax_index = 0;
 					if (usage_count > USAGE_LIST_LEN) {
 						// usage numbers by min/max, not from list
 						uindex = usage[0];
@@ -620,6 +644,12 @@ void USBHIDParser::parse(uint16_t type_and_report_id, const uint8_t *data, uint3
 						if (uminmax) {
 							u = uindex;
 							if (uindex < uindex_max) uindex++;
+							else if (uminmax_index < usage_min_max_count) {
+								uminmax_index++;
+								uindex = usage[uminmax_index * 2];
+								uindex_max = usage[uminmax_index * 2 + 1];
+								//USBHDBGSerial.printf("$$ next min/max pair: %u %u %u\n", uminmax_index, uindex, uindex_max);
+							}
 						} else {
 							u = usage[uindex++];
 							if (uindex >= USAGE_LIST_LEN-1) {
@@ -692,6 +722,7 @@ void USBHIDParser::parse(uint16_t type_and_report_id, const uint8_t *data, uint3
 		}
 		if (reset_local) {
 			usage_count = 0;
+			usage_min_max_count = 0;
 			usage[0] = 0;
 			usage[1] = 0;
 		}
