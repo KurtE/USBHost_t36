@@ -673,20 +673,53 @@ void USBHIDParser::parse(uint16_t type_and_report_id, const uint8_t *data, uint3
 					}
 				} else {
 					// array format, each item is a usage number
-					for (uint32_t i=0; i < report_count; i++) {
-						uint32_t u = bitfield(data, bitindex, report_size);
-						int n = u;
-						if (n >= logical_min && n <= logical_max) {
+					// maybe act like the 2 case...
+					if (usage_min_max_count) {
+						uint32_t uindex = usage[0];
+						uint32_t uindex_max = usage[1];
+						uint8_t uminmax_index = 0;
+						uint32_t u;
+
+						for (uint32_t i=0; i < report_count; i++) {
+							u = uindex;
+							if (uindex < uindex_max) uindex++;
+							else if (uminmax_index < usage_min_max_count) {
+								uminmax_index++;
+								uindex = usage[uminmax_index * 2];
+								uindex_max = usage[uminmax_index * 2 + 1];
+								//USBHDBGSerial.printf("$$ next min/max pair: %u %u %u\n", uminmax_index, uindex, uindex_max);
+							}
+
 							u |= (uint32_t)usage_page << 16;
-							print("  usage = ", u, HEX);
-							println("  data = 1");
-							driver->hid_input_data(u, 1);
-						} else {
-							print ("  usage =", u, HEX);
-							print(" out of range: ", logical_min, HEX);
-							println(" ", logical_max, HEX);
+							uint32_t n = bitfield(data, bitindex, report_size);
+							if (logical_min >= 0) {
+								println("  data = ", n);
+								driver->hid_input_data(u, n);
+							} else {
+								int32_t sn = signext(n, report_size);
+								println("  sdata = ", sn);
+								driver->hid_input_data(u, sn);
+							}
+
+							bitindex += report_size;
 						}
-						bitindex += report_size;
+
+					} else {
+						for (uint32_t i=0; i < report_count; i++) {
+							uint32_t u = bitfield(data, bitindex, report_size);
+							int n = u;
+							if (n >= logical_min && n <= logical_max) {
+								u |= (uint32_t)usage_page << 16;
+								print("  usage = ", u, HEX);
+								println("  data = 1");
+								driver->hid_input_data(u, 1);
+							} else {
+								print ("  usage =", u, HEX);
+								print(" out of range: ", logical_min, HEX);
+								println(" ", logical_max, HEX);
+							}
+							bitindex += report_size;
+						}
 					}
 				}
 			}
