@@ -345,25 +345,32 @@ hidclaim_t KeyboardController::claim_collection(USBHIDParser *driver, Device_t *
 	// Lets try to claim a few specific Keyboard related collection/reports
 	USBHDBGSerial.printf("KeyboardController::claim_collection(%p) Driver:%p(%u %u) Dev:%p Top:%x\n", this, driver, 
 		driver->interfaceSubClass(), driver->interfaceProtocol(), dev, topusage);
-	if ((topusage != TOPUSAGE_KEYBOARD) 
-			 && (topusage != TOPUSAGE_SYS_CONTROL) 
-			 && (topusage != TOPUSAGE_CONSUMER_CONTROL) )
-		return CLAIM_NO;
 
 	// only claim from one physical device
 	// Lets only claim if this is the same device as claimed Keyboard... 
 	//USBHDBGSerial.printf("\tdev=%p mydevice=%p\n", dev, mydevice);
+
 	if (mydevice != NULL && dev != mydevice) return CLAIM_NO;
 
-	// keep all three drivers:
-	if (topusage == TOPUSAGE_KEYBOARD) {
-		driver_[0] = driver;
-		USBHDBGSerial.printf("\t$$Send SET_IDLE\n");
-      	driver_[0]->sendControlPacket(0x21, 10, 0, 0, 0, nullptr); //10=SET_IDLE
+	// We will claim if BOOT Keyboard.
+	if (((driver->interfaceSubClass() == 1) && (driver->interfaceProtocol() == 1)) 
+		|| (topusage == TOPUSAGE_KEYBOARD))
+	{
+		// OK boot keyboard or what we think is top level keyboard.
+		// Note only set the driver 0 o
+		if (driver_[0] == nullptr) {
+			driver_[0] = driver;
+			USBHDBGSerial.printf("\t$$Send SET_IDLE\n");
+	      	driver_[0]->sendControlPacket(0x21, 10, 0, 0, 0, nullptr); //10=SET_IDLE
+		} 
 
+     } else if ((topusage == TOPUSAGE_CONSUMER_CONTROL) 
+			 || (topusage == TOPUSAGE_SYS_CONTROL) 
+			 || ((topusage & 0xfffffff0) == 0x10000))  { // See if we can catch the secondary ones. 
+		driver_[1] = driver;
+     } else {
+		return CLAIM_NO;
 	}
-	else if (topusage == TOPUSAGE_SYS_CONTROL) driver_[1] = driver;
-	else driver_[2] = driver;
 	mydevice = dev;
 	collections_claimed_++;
 	USBHDBGSerial.printf("KeyboardController claim collection\n");
@@ -381,20 +388,20 @@ void KeyboardController::disconnect_collection(Device_t *dev)
 bool KeyboardController::hid_process_in_data(const Transfer_t *transfer)
 {
 	const uint8_t *buffer = (const uint8_t *)transfer->buffer;
-	/*
 	uint16_t len = transfer->length;
 	const uint8_t *p = buffer;
 	USBHDBGSerial.printf("HPID(%p, %u):", transfer->driver, len);
 	  if (len > 32) len = 32;
 	while (len--) USBHDBGSerial.printf(" %02X", *p++);
-	USBHDBGSerial.printf("\n");
-	*/
 	// Probably need to do some more checking of the data, but
 	// first pass if length == 8 assume boot format:
-	if (transfer->length == 8) {
+	// Hoped driver would be something I could check but...
+	if ((transfer->driver == driver_[0]) &&  (transfer->length == 8)) {
+		USBHDBGSerial.printf(" (boot)\n");
 		process_boot_keyboard_format(buffer, true);
 		return true;
 	}
+	USBHDBGSerial.printf("\n");
 
 	return false;
 }

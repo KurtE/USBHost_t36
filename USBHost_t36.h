@@ -888,13 +888,17 @@ private:
 	void (*rawKeyReleasedFunction)(uint8_t keycode) = nullptr;
 	Pipe_t *datapipe;
 	setup_t setup;
-	union {
-		struct {
-			uint8_t report_[8];
-			uint8_t prev_report_[8];
-		};
-		uint8_t key_states_[16]; 
-	};
+	// Need two sets of structures to properly support some keyboards
+	// that do N key roll-over.  They use the Boot report up to 
+	// 6 keys down and then they go to other format for additional
+	// keys. 
+	// Boot format
+	uint8_t report_[8];
+	uint8_t prev_report_[8];
+
+	// N Key reollover
+	uint8_t key_states_[16]; 
+
 	uint16_t keyCode;
 	uint8_t modifiers_ = 0;
 	uint8_t keyOEM_;
