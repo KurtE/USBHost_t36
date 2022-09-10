@@ -685,7 +685,7 @@ public:
 	const uint8_t * getHIDReportDescriptor() {return descriptor;}
 	uint16_t getHIDReportDescriptorSize() { return descsize;}
 protected:
-	enum { TOPUSAGE_LIST_LEN = 4 };
+	enum { TOPUSAGE_LIST_LEN = 6 };
 	enum { USAGE_LIST_LEN = 24 };
 	virtual bool claim(Device_t *device, int type, const uint8_t *descriptors, uint32_t len);
 	virtual void control(const Transfer_t *transfer);

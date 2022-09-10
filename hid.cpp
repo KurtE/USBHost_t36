@@ -310,10 +310,10 @@ bool USBHIDParser::sendControlPacket(uint32_t bmRequestType, uint32_t bRequest,
 			uint32_t wValue, uint32_t wIndex, uint32_t wLength, void *buf)
 {
 	// Use setup structure to build packet 
-	Serial.printf(">>> SendControlPacket: %x %x %x %x %d", bmRequestType, bRequest, wValue, wIndex, wLength);
+	//USBHDBGSerial.printf(">>> SendControlPacket: %x %x %x %x %d", bmRequestType, bRequest, wValue, wIndex, wLength);
 	mk_setup(setup, bmRequestType, bRequest, wValue, wIndex, wLength); // ps3 tell to send report 1?
 	bool fReturn =  queue_Control_Transfer(device, &setup, buf, this);
-	Serial.printf(" return: %u\n", fReturn);
+	//USBHDBGSerial.printf(" return: %u\n", fReturn);
 	return fReturn;
 }
 
@@ -674,7 +674,7 @@ void USBHIDParser::parse(uint16_t type_and_report_id, const uint8_t *data, uint3
 				} else {
 					// array format, each item is a usage number
 					// maybe act like the 2 case...
-					if (usage_min_max_count) {
+					if (usage_min_max_count && (report_size == 1)) {
 						uint32_t uindex = usage[0];
 						uint32_t uindex_max = usage[1];
 						uint8_t uminmax_index = 0;

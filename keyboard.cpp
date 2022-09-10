@@ -343,8 +343,8 @@ void KeyboardController::process_boot_keyboard_format(const uint8_t *report, boo
 hidclaim_t KeyboardController::claim_collection(USBHIDParser *driver, Device_t *dev, uint32_t topusage)
 {
 	// Lets try to claim a few specific Keyboard related collection/reports
-	USBHDBGSerial.printf("KeyboardController::claim_collection(%p) Driver:%p(%u %u) Dev:%p Top:%x\n", this, driver, 
-		driver->interfaceSubClass(), driver->interfaceProtocol(), dev, topusage);
+	//USBHDBGSerial.printf("KeyboardController::claim_collection(%p) Driver:%p(%u %u) Dev:%p Top:%x\n", this, driver, 
+	//	driver->interfaceSubClass(), driver->interfaceProtocol(), dev, topusage);
 
 	// only claim from one physical device
 	// Lets only claim if this is the same device as claimed Keyboard... 
@@ -360,7 +360,7 @@ hidclaim_t KeyboardController::claim_collection(USBHIDParser *driver, Device_t *
 		// Note only set the driver 0 o
 		if (driver_[0] == nullptr) {
 			driver_[0] = driver;
-			USBHDBGSerial.printf("\t$$Send SET_IDLE\n");
+			//USBHDBGSerial.printf("\t$$Send SET_IDLE\n");
 	      	driver_[0]->sendControlPacket(0x21, 10, 0, 0, 0, nullptr); //10=SET_IDLE
 		} 
 
@@ -373,7 +373,7 @@ hidclaim_t KeyboardController::claim_collection(USBHIDParser *driver, Device_t *
 	}
 	mydevice = dev;
 	collections_claimed_++;
-	USBHDBGSerial.printf("KeyboardController claim collection\n");
+	//USBHDBGSerial.printf("KeyboardController claim collection\n");
 	return CLAIM_REPORT;
 }
 
@@ -388,16 +388,17 @@ void KeyboardController::disconnect_collection(Device_t *dev)
 bool KeyboardController::hid_process_in_data(const Transfer_t *transfer)
 {
 	const uint8_t *buffer = (const uint8_t *)transfer->buffer;
+	/*
 	uint16_t len = transfer->length;
 	const uint8_t *p = buffer;
 	USBHDBGSerial.printf("HPID(%p, %u):", transfer->driver, len);
 	  if (len > 32) len = 32;
-	while (len--) USBHDBGSerial.printf(" %02X", *p++);
+	while (len--) USBHDBGSerial.printf(" %02X", *p++); */
 	// Probably need to do some more checking of the data, but
 	// first pass if length == 8 assume boot format:
 	// Hoped driver would be something I could check but...
 	if ((transfer->driver == driver_[0]) &&  (transfer->length == 8)) {
-		USBHDBGSerial.printf(" (boot)\n");
+		/*USBHDBGSerial.printf(" (boot)\n"); */
 		process_boot_keyboard_format(buffer, true);
 		return true;
 	}
@@ -420,8 +421,8 @@ void KeyboardController::hid_input_begin(uint32_t topusage, uint32_t type, int l
 void KeyboardController::hid_input_data(uint32_t usage, int32_t value)
 {
 	// Hack ignore 0xff00 high words as these are user values... 
-	if ((usage & 0xffff0000) == 0xff000000) return; 
 	//USBHDBGSerial.printf("KeyboardController: topusage= %x usage=%X, value=%d\n", topusage_, usage, value);
+	if ((usage & 0xffff0000) == 0xff000000) return; 
 	// If this is the TOPUSAGE_KEYBOARD do in it's own function
 	if (process_hid_keyboard_data(usage, value))
 		return;
@@ -556,19 +557,19 @@ void KeyboardController::hid_input_end()
 
 bool KeyboardController::claim_bluetooth(BluetoothController *driver, uint32_t bluetooth_class, uint8_t *remoteName) 
 {
-	USBHDBGSerial.printf("Keyboard Controller::claim_bluetooth - Class %x\n", bluetooth_class);
+	//USBHDBGSerial.printf("Keyboard Controller::claim_bluetooth - Class %x\n", bluetooth_class);
 	// If we are already in use than don't grab another one.  Likewise don't grab if it is used as USB or HID object
 	if (btdevice && (btdevice != (Device_t*)driver)) return false;
 	if (mydevice != NULL) return false;
 
 	if ((((bluetooth_class & 0xff00) == 0x2500) || (((bluetooth_class & 0xff00) == 0x500))) && (bluetooth_class & 0x40)) {
 		if (remoteName && (strncmp((const char *)remoteName, "PLAYSTATION(R)3", 15) == 0)) {
-			USBHDBGSerial.printf("KeyboardController::claim_bluetooth Reject PS3 hack\n");
+			//USBHDBGSerial.printf("KeyboardController::claim_bluetooth Reject PS3 hack\n");
 			btdevice = nullptr;	// remember this way 
 
 			return false;
 		}
-		USBHDBGSerial.printf("KeyboardController::claim_bluetooth TRUE\n");
+		//USBHDBGSerial.printf("KeyboardController::claim_bluetooth TRUE\n");
 		btdevice = (Device_t*)driver;	// remember this way 
 		return true;
 	}
@@ -597,7 +598,7 @@ bool KeyboardController::process_bluetooth_HID_data(const uint8_t *data, uint16_
 	//BT rx2_data(18): 48 20 e 0 a 0 70 0 a1 1 2 0 4 0 0 0 0 0 
 	//BT rx2_data(18): 48 20 e 0 a 0 70 0 a1 1 2 0 0 0 0 0 0 0 
 	// So Len=9 passed in data starting at report ID=1... 
-	USBHDBGSerial.printf("KeyboardController::process_bluetooth_HID_data\n");
+	//USBHDBGSerial.printf("KeyboardController::process_bluetooth_HID_data\n");
 	if (data[0] != 1) return false;
 	print("  KB Data: ");
 	print_hexbytes(data, length);

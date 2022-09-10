@@ -699,7 +699,7 @@ const char * MapExtraKeyToString(uint32_t top, uint16_t key) {
 
 void OnHIDExtrasPress(uint32_t top, uint16_t key) {
   const char *sz = MapExtraKeyToString(top, key);
-  Serial.printf("OnHIDExtrasPress(%x, %x): %s\n", top, key, sz);
+  //Serial.printf("OnHIDExtrasPress(%x, %x): %s\n", top, key, sz);
   ShowLastKeyChange(sz, true);
 }
 
