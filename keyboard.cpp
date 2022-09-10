@@ -382,6 +382,7 @@ void KeyboardController::disconnect_collection(Device_t *dev)
 	if (--collections_claimed_ == 0) {
 		mydevice = NULL;
 		driver_[0] = NULL;
+		keyboard_uses_boot_format_ = false;
 	}
 }
 
@@ -400,6 +401,7 @@ bool KeyboardController::hid_process_in_data(const Transfer_t *transfer)
 	if ((transfer->driver == driver_[0]) &&  (transfer->length == 8)) {
 		/*USBHDBGSerial.printf(" (boot)\n"); */
 		process_boot_keyboard_format(buffer, true);
+		keyboard_uses_boot_format_  = true;
 		return true;
 	}
 	USBHDBGSerial.printf("\n");
@@ -503,7 +505,7 @@ bool KeyboardController::process_hid_keyboard_data(uint32_t usage, int32_t value
 
 	if ((usage >= 0x70000) && (usage <= 0x70073)) {
 		usage &= 0xff; // only use the low byte
-		if (topusage_type_ & 0x2) {
+		if (keyboard_uses_boot_format_ || (topusage_type_ & 0x2)) {
 			//normal variable - so use bitindex array to figure out what is new and what is old
 			uint8_t key_byte_index = usage >> 3; //which byte in key_states_.
 			uint8_t key_bit_mask = 1 << (usage & 0x7);
@@ -537,7 +539,7 @@ void KeyboardController::hid_input_end()
 {
 	//USBHDBGSerial.printf("KPC:hid_input_end %u %u\n", hid_input_begin_, hid_input_data_);
 	if (hid_input_begin_) {
-		if (((topusage_type_ & 0x2) == 0) && (topusage_index_ > 2)) {
+		if (!keyboard_uses_boot_format_ && ((topusage_type_ & 0x2) == 0) && (topusage_index_ > 2)) {
 			// we have boot data.
 			process_boot_keyboard_format(report_, false);
 		}

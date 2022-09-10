@@ -912,6 +912,7 @@ private:
 	uint32_t topusage_type_ = 0;
 	uint32_t topusage_index_ = 0;	
 	uint8_t collections_claimed_ = 0;
+	bool keyboard_uses_boot_format_  = false;
 	volatile bool hid_input_begin_ = false;
 	volatile bool hid_input_data_ = false; 	// did we receive any valid data with report?
 
