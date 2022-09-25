@@ -18,6 +18,7 @@
 // This example is in the public domain
 //=============================================================================
 //#define USE_ST77XX // define this if you wish to use one of these displays.
+#define USE_KURTE_MMOD2
 
 #include "USBHost_t36.h"
 
@@ -43,9 +44,15 @@
 //=============================================================================
 // Connection configuration of ILI9341 LCD TFT
 //=============================================================================
+#ifdef USE_KURTE_MMOD2
+#define TFT_RST 31
+#define TFT_DC 9
+#define TFT_CS 32
+#else
 #define TFT_RST 8
 #define TFT_DC 9
 #define TFT_CS 10
+#endif
 
 #ifdef USE_ST77XX
 // define which one you are using
@@ -70,6 +77,8 @@ USBHIDParser hid2(myusb);
 USBHIDParser hid3(myusb);
 USBHIDParser hid4(myusb);
 USBHIDParser hid5(myusb);
+USBHIDParser hid6(myusb);
+USBHIDParser hid7(myusb);
 MouseController mouse(myusb);
 DigitizerController tablet(myusb);
 JoystickController joystick(myusb);
@@ -79,10 +88,10 @@ RawHIDController rawhid2(myusb);
 
 // Lets only include in the lists The most top level type devices we wish to show information for.
 //USBDriver *drivers[] = {&keyboard1, &keyboard2, &joystick};
-USBDriver *drivers[] = {&joystick, &bluet, &hid1, &hid2};
+USBDriver *drivers[] = {&joystick, &bluet, &hid1, &hid2, &hid3, &hid4, &hid5, &hid6, &hid7};
 
 #define CNT_DEVICES (sizeof(drivers)/sizeof(drivers[0]))
-const char * driver_names[CNT_DEVICES] = {"Joystick(device)", "Bluet", "HID1" , "HID2"};
+const char * driver_names[CNT_DEVICES] = {"Joystick(device)", "Bluet", "HID1" , "HID2", "HID3" , "HID4", "HID5" , "HID6", "HID7"};
 bool driver_active[CNT_DEVICES] = {false, false, false, false};
 
 // Lets also look at HID Input devices

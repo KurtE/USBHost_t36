@@ -564,7 +564,7 @@ void KeyboardController::hid_input_end()
 
 bool KeyboardController::claim_bluetooth(BluetoothController *driver, uint32_t bluetooth_class, uint8_t *remoteName) 
 {
-	//USBHDBGSerial.printf("Keyboard Controller::claim_bluetooth - Class %x\n", bluetooth_class);
+	USBHDBGSerial.printf("Keyboard Controller::claim_bluetooth - Class %x\n", bluetooth_class);
 	// If we are already in use than don't grab another one.  Likewise don't grab if it is used as USB or HID object
 	if (btdevice && (btdevice != (Device_t*)driver)) return false;
 	if (mydevice != NULL) return false;
@@ -576,7 +576,7 @@ bool KeyboardController::claim_bluetooth(BluetoothController *driver, uint32_t b
 
 			return false;
 		}
-		//USBHDBGSerial.printf("KeyboardController::claim_bluetooth TRUE\n");
+		USBHDBGSerial.printf("KeyboardController::claim_bluetooth TRUE\n");
 		btdevice = (Device_t*)driver;	// remember this way 
 		return true;
 	}
@@ -605,7 +605,11 @@ bool KeyboardController::process_bluetooth_HID_data(const uint8_t *data, uint16_
 	//BT rx2_data(18): 48 20 e 0 a 0 70 0 a1 1 2 0 4 0 0 0 0 0 
 	//BT rx2_data(18): 48 20 e 0 a 0 70 0 a1 1 2 0 0 0 0 0 0 0 
 	// So Len=9 passed in data starting at report ID=1... 
-	//USBHDBGSerial.printf("KeyboardController::process_bluetooth_HID_data\n");
+	USBHDBGSerial.printf("KBD::process_bluetooth_HID_data: ");
+	for (uint8_t i = 0; i < length; i++) USBHDBGSerial.printf(" %02X", data[i]); 
+	USBHDBGSerial.printf("\n");
+
+
 	if (data[0] != 1) return false;
 	print("  KB Data: ");
 	print_hexbytes(data, length);

@@ -59,7 +59,7 @@
 
 
 // Uncomment this line to see lots of debugging info!
-//#define USBHOST_PRINT_DEBUG
+#define USBHOST_PRINT_DEBUG
 
 
 // This can let you control where to send the debugging messages
@@ -1939,23 +1939,23 @@ class BluetoothController: public USBDriver {
 public:
 	static const uint8_t MAX_CONNECTIONS = 4;
 	typedef struct {
-    BTHIDInput * 	device_driver_ = nullptr;;
-    uint16_t		connection_rxid_ = 0;
-    uint16_t		control_dcid_ = 0x70;
-    uint16_t		interrupt_dcid_ = 0x71;
+		BTHIDInput * 	device_driver_ = nullptr;;
+		uint16_t		connection_rxid_ = 0;
+		uint16_t		control_dcid_ = 0x70;
+		uint16_t		interrupt_dcid_ = 0x71;
 		uint16_t		sdp_dcid_ = 0x40;	
-    uint16_t		interrupt_scid_;
-    uint16_t		control_scid_;
+		uint16_t		interrupt_scid_;
+		uint16_t		control_scid_;
 		uint16_t		sdp_scid_;
-    uint8_t			device_bdaddr_[6];// remember devices address
-    uint8_t			device_ps_repetion_mode_ ; // mode
-    uint8_t			device_clock_offset_[2];
-    uint32_t		device_class_;	// class of device. 
-    uint16_t		device_connection_handle_;	// handle to connection 
-	uint8_t    		remote_ver_;
-	uint16_t		remote_man_;
-	uint8_t			remote_subv_;
-	uint8_t			connection_complete_ = false;	//
+		uint8_t			device_bdaddr_[6];// remember devices address
+		uint8_t			device_ps_repetion_mode_ ; // mode
+		uint8_t			device_clock_offset_[2];
+		uint32_t		device_class_;	// class of device. 
+		uint16_t		device_connection_handle_;	// handle to connection 
+		uint8_t    		remote_ver_;
+		uint16_t		remote_man_;
+		uint8_t			remote_subv_;
+		uint8_t			connection_complete_ = false;	//
 	} connection_info_t;
 
 	BluetoothController(USBHost &host, bool pair = false, const char *pin = "0000") : do_pair_device_(pair), pair_pincode_(pin), delayTimer_(this) 
@@ -1968,8 +1968,13 @@ public:
     const uint8_t* 	myBDAddr(void) {return my_bdaddr_;}
 
 	// BUGBUG version to allow some of the controlled objects to call?
-    enum {CONTROL_SCID=-1, INTERRUPT_SCID=-2};
+    enum {CONTROL_SCID=-1, INTERRUPT_SCID=-2, SDP_SCID=-3};
     void sendL2CapCommand(uint8_t* data, uint8_t nbytes, int channel = (int)0x0001);
+    void connectToSDP(); // temp to see if we can do this later...
+
+    // will be private
+	void send_SDP_ServiceSearchRequest(uint8_t *continue_state, uint8_t cb);
+	void send_SDP_ServiceSearchAttributeRequest(uint8_t *continue_state, uint8_t cb);
 
 protected:
 	virtual bool claim(Device_t *device, int type, const uint8_t *descriptors, uint32_t len);
@@ -1981,17 +1986,10 @@ protected:
 
 	// Hack to allow PS3 to maybe change values
     uint16_t		next_dcid_ = 0x70;		// Lets try not hard coding control and interrupt dcid
-#if 0    
-    uint16_t		connection_rxid_ = 0;
-    uint16_t		control_dcid_ = 0x70;
-    uint16_t		interrupt_dcid_ = 0x71;
-    uint16_t		interrupt_scid_;
-    uint16_t		control_scid_;
-#else
     connection_info_t connections_[MAX_CONNECTIONS];
     uint8_t count_connections_ = 0;
     uint8_t current_connection_ = 0;	// need to figure out when this changes and/or... 
-#endif    
+    uint8_t  seq_number_ = 0;
 
 private:
 	friend class BTHIDInput;
@@ -2039,12 +2037,17 @@ private:
 	void handle_hci_link_key_notification();
 	void handle_hci_link_key_request();
 	void queue_next_hci_command();
+	
+	void handle_hci_io_capability_response();
+	void handle_hci_io_capability_request();
+	void handle_hci_io_capability_request_reply();
 
 	void sendl2cap_ConnectionResponse(uint16_t handle, uint8_t rxid, uint16_t dcid, uint16_t scid, uint8_t result);
 	void sendl2cap_ConnectionRequest(uint16_t handle, uint8_t rxid, uint16_t scid, uint16_t psm);
 	void sendl2cap_ConfigRequest(uint16_t handle, uint8_t rxid, uint16_t dcid);
 	void sendl2cap_ConfigResponse(uint16_t handle, uint8_t rxid, uint16_t scid);
-    void sendL2CapCommand(uint16_t handle, uint8_t* data, uint8_t nbytes, uint8_t channelLow = 0x01, uint8_t channelHigh = 0x00);
+	void sendl2cap_DisconnectResponse(uint16_t handle, uint8_t rxid, uint16_t dcid, uint16_t scid);
+	void sendL2CapCommand(uint16_t handle, uint8_t* data, uint8_t nbytes, uint8_t channelLow = 0x01, uint8_t channelHigh = 0x00);
 
 	void process_l2cap_connection_request(uint8_t *data);
 	void process_l2cap_connection_response(uint8_t *data);
@@ -2052,6 +2055,15 @@ private:
 	void process_l2cap_config_response(uint8_t *data);
 	void process_l2cap_command_reject(uint8_t *data);
 	void process_l2cap_disconnect_request(uint8_t *data);
+
+	// Add starts of SDP processing.
+	void process_sdp_service_search_request(uint8_t *data);
+	void process_sdp_service_search_response(uint8_t *data);
+	void process_sdp_service_attribute_request(uint8_t *data);
+	void process_sdp_service_attribute_response(uint8_t *data);
+	void process_sdp_service_search_attribute_request(uint8_t *data);
+	void process_sdp_service_search_attribute_response(uint8_t *data);
+
 
 	void setHIDProtocol(uint8_t protocol);
 	void handleHIDTHDRData(uint8_t *buffer);	// Pass the whole buffer...
@@ -2071,9 +2083,11 @@ private:
 	Pipe_t 			*rx2pipe_;
 	Pipe_t 			*txpipe_;
 	uint8_t 		rxbuf_[256];	// used to receive data from RX, which may come with several packets...
-	uint8_t 		rx_packet_data_remaining=0; // how much data remaining
-	uint8_t 		rx2buf_[64];	// receive buffer from Bulk end point
+	uint8_t 		rx_packet_data_remaining_=0; // how much data remaining
 	uint8_t			txbuf_[256];	// buffer to use to send commands to bluetooth 
+	uint8_t 		rx2buf_[64];	// receive buffer from Bulk end point
+	uint8_t 		rx2buf2_[64];	// receive buffer from Bulk end point
+	uint8_t 		rx2_packet_data_remaining_=0; // how much data remaining
 	uint8_t			hciVersion;		// what version of HCI do we have?
 
 	bool 			do_pair_device_;	// Should we do a pair for a new device?
