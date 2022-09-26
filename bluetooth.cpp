@@ -1158,7 +1158,7 @@ void BluetoothController::rx2_data(const Transfer_t *transfer)
 		}
 		// need to detect if these are L2CAP or SDP or ...
 		uint16_t dcid =  rx2buf_[6] + ((uint16_t)rx2buf_[7]<<8);
-		DBGPrintf("@@@@@@ SDP MSG? %x %x %x @@@@@", dcid, connections_[current_connection_].sdp_dcid_, rx2buf_[8]);
+		//DBGPrintf("@@@@@@ SDP MSG? %x %x %x @@@@@", dcid, connections_[current_connection_].sdp_dcid_, rx2buf_[8]);
 
 		if (dcid == connections_[current_connection_].sdp_dcid_) {
 			switch (rx2buf_[8]) {
@@ -1487,6 +1487,24 @@ void BluetoothController::sendl2cap_DisconnectResponse(uint16_t handle, uint8_t 
 }
 
 
+//=============================================================================
+
+//=============================================================================
+bool BluetoothController::startSDP_ServiceSearchAttributeRequest(uint16_t range_low, uint16_t range_high, uint8_t *buffer, uint32_t cb)
+{
+	sdp_request_range_low_ = range_low;
+	sdp_reqest_range_high_ = range_high;
+	sdp_request_buffer_ = buffer;
+	sdp_request_buffer_cb_ = cb;
+	sdp_request_buffer_used_cnt_ = 0; // cnt in bytes used.
+	sdp_request_completed_ = false; 
+
+	// So start it up
+	send_SDP_ServiceSearchAttributeRequest(nullptr, 0);
+	return true;
+}
+
+
 void BluetoothController::send_SDP_ServiceSearchRequest(uint8_t *continue_state, uint8_t cb) 
 {
   // Example message: first part l2cap. Which will let them fill that in
@@ -1528,15 +1546,16 @@ void BluetoothController::send_SDP_ServiceSearchAttributeRequest(uint8_t *contin
   //  PSM header: 0x6 0x0 0x0 0x0 0xf 
   //  req: 0x35 0x3 0x19 0x1 0x0 0xff 0xff 0x35 0x5 0xa 0x0 0x0 0xff 0xff 0x0
   
+  uint16_t continue_data_offset = 17;    	
   uint8_t sdpcmdbuf[37]; // 20 + up to 17 continue
   seq_number_++;
-  uint16_t packet_size = (20 - 5) + cb;
+
 
   sdpcmdbuf[0] = 0x6; // SDP_ServiceSearchAttributeReques
   sdpcmdbuf[1] = seq_number_ >> 8;   // Sequence number 
   sdpcmdbuf[2] = seq_number_ & 0xff; // 
-  sdpcmdbuf[3] = packet_size >> 8;   // Data in the rest...
-  sdpcmdbuf[4] = packet_size & 0xff; // 
+  //sdpcmdbuf[3] = packet_size >> 8;   // Data in the rest...
+  //sdpcmdbuf[4] = packet_size & 0xff; // 
   
   // Now lets build the attribute request data.
   // 0x35 0x3 0x19 0x1 0x0 0xff 0xff 0x35 0x5 0xa 0x0 0x0 0xff 0xff 0x2 0x0 0x26
@@ -1549,17 +1568,32 @@ void BluetoothController::send_SDP_ServiceSearchAttributeRequest(uint8_t *contin
   sdpcmdbuf[10] = 0xff;  //  MAX size  
   sdpcmdbuf[11] = 0xff; //   
   sdpcmdbuf[12] = 0x35; // Sequence    
-  sdpcmdbuf[13] = 0x05;  //  5 bytes  
-  sdpcmdbuf[14] = 0x0A;  //  4 byte integer   
-  sdpcmdbuf[15] = 0x00;  //    Attribute low 
-  sdpcmdbuf[16] = 0x00;  //    
-  sdpcmdbuf[17] = 0xff;  //    high  
-  sdpcmdbuf[18] = 0xff;  //    high  
-  sdpcmdbuf[19] = cb;    // Count of continuation bytes  
-  for (uint8_t i = 0; i < cb; i++) sdpcmdbuf[20+i] = continue_state[i];
+
+  if (sdp_request_range_low_ == sdp_reqest_range_high_) {
+  	  // doing specific
+	  sdpcmdbuf[13] = 0x03;  //  3 bytes  
+	  sdpcmdbuf[14] = 0x09;  //  2 byte integer   
+	  sdpcmdbuf[15] = sdp_request_range_low_ >> 8;  //    Attribute low 
+	  sdpcmdbuf[16] = sdp_request_range_low_ & 0xff;  //    
+  } else {
+  	  // doing range
+	  sdpcmdbuf[13] = 0x05;  //  5 bytes  
+	  sdpcmdbuf[14] = 0x0A;  //  4 byte integer   
+	  sdpcmdbuf[15] = sdp_request_range_low_ >> 8;  //    Attribute low 
+	  sdpcmdbuf[16] = sdp_request_range_low_ & 0xff;  //    
+	  sdpcmdbuf[17] = sdp_reqest_range_high_ & 0xff;  //    high  
+	  sdpcmdbuf[18] = sdp_reqest_range_high_ & 0xff;  //    high
+	  continue_data_offset = 19;    	
+  }
+  sdpcmdbuf[continue_data_offset++] = cb;    // Count of continuation bytes  
+  for (uint8_t i = 0; i < cb; i++) sdpcmdbuf[continue_data_offset+i] = continue_state[i];
+
+  uint16_t packet_size = (continue_data_offset - 5) + cb;
+  sdpcmdbuf[3] = packet_size >> 8;   // Data in the rest...
+  sdpcmdbuf[4] = packet_size & 0xff; // 
 
   // Now lets try to send the packet
-  sendL2CapCommand(sdpcmdbuf, 20 + cb, SDP_SCID);			
+  sendL2CapCommand(sdpcmdbuf, continue_data_offset + cb, SDP_SCID);			
 }
 
 
@@ -1897,12 +1931,7 @@ void BluetoothController::process_sdp_service_attribute_request(uint8_t *data) {
 }
 
 void BluetoothController::process_sdp_service_attribute_response(uint8_t *data) {
-	DBGPrintf("process_sdp_service_attribute_response\n");
-//>>(02):48 20 18 00 14 00 41 00 06 00 01 00 0F 35 03 19 01 00 FF FF 35 05 0A 00 00 FF FF 00 
-//<<(02):48 20 1B 00 30 00 40 00 07 00 01 00 2B 00 26 36 03 AD 36 00 8E 09 00 00 0A 00 00 00 00 09 00 
-//<<(02):48 20 1B 00 30 00 40 00 07 00 01 00 2B 00 26 36 03 AD 36 00 8E 09 00 00 0A 00 00 00 00 09 00 
-//<<(02):48 10 19 00 01 35 03 19 10 00 09 00 04 35 0D 35 06 19 01 00 09 00 01 35 03 19 02 00 26 
-//       47 20 34 00 30 00 40 00 07 00 00 00 2b 00 26 36 03 ad 36 00 8e 09 00 00 0a 00 00 00 00 09 00 01 35 03 19 10 00 09 00 04 35 0d 35 06 19 01 00 09 00 01 35 03 19 02 00 26
+	DBGPrintf("process_sdp_service_attribute_response:\n");
 }
 
 void BluetoothController::process_sdp_service_search_attribute_request(uint8_t *data) {
@@ -1944,6 +1973,31 @@ void BluetoothController::process_sdp_service_search_attribute_request(uint8_t *
 }
 
 void BluetoothController::process_sdp_service_search_attribute_response(uint8_t *data) {
-	DBGPrintf("process_sdp_service_search_attribute_response\n");
+	//before :0B 20 34 00 30 00 40 00
+ 	// (00) 07 00 01 00 2B
+ 	// (5) 00 26  // cb_data
+ 	// (7) 36 03 A2 36 00 8E 09 00 00 0A 00 00 00 00 09 00 01 35 03 19 10 00 09 00 04 35 0D 35 06 19 01 00 09 00 01 35 03 19 // data
+ 	// (7 + cb_data) 02 00 26 //
+
+	uint16_t cb_data = (data[5] << 8) + data[6];
+	uint8_t cb_cont = data[7+cb_data];
+	uint8_t *pb_cont = &data[8+cb_data];
+
+	DBGPrintf("process_sdp_service_search_attribute_response: cb dat:%u cont:%u ", cb_data, cb_cont);
+	for (uint8_t i = 0; i < cb_cont; i++) DBGPrintf(" %02X", pb_cont[i]);
+	DBGPrintf("\n");
+
+	// lets copy the data in...
+	uint16_t cb_space = sdp_request_buffer_cb_ - sdp_request_buffer_used_cnt_;
+	if (cb_data > cb_space) cb_data = cb_space;
+	memcpy(&sdp_request_buffer_[sdp_request_buffer_used_cnt_], &data[7], cb_data);
+	sdp_request_buffer_used_cnt_ += cb_data;
+
+	// Now see if we are done or not, if not start up next request
+	if ((cb_cont == 0) || (sdp_request_buffer_used_cnt_ == sdp_request_buffer_cb_)) sdp_request_completed_ = true;
+	else {
+		send_SDP_ServiceSearchAttributeRequest(pb_cont, cb_cont);
+
+	}
 }
 

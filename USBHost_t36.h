@@ -546,7 +546,7 @@ class BluetoothController;
 
 class BTHIDInput {
 public:
-	operator bool() { return (btdevice != nullptr); }
+	virtual operator bool() { return (btdevice != nullptr); } // experiment to see if overriding makes sense here
 	uint16_t idVendor() { return (btdevice != nullptr) ? btdevice->idVendor : 0; }
 	uint16_t idProduct() { return (btdevice != nullptr) ? btdevice->idProduct : 0; }
 	const uint8_t *manufacturer()
@@ -1973,8 +1973,18 @@ public:
     void connectToSDP(); // temp to see if we can do this later...
 
     // will be private
+    bool startSDP_ServiceSearchAttributeRequest(uint16_t range_low, uint16_t range_high, uint8_t *buffer, uint32_t cb);
+    bool SDPRequestCompleted() {return sdp_request_completed_;}
+    uint32_t SDPRequestBufferUsed() {return sdp_request_buffer_used_cnt_;}
+
 	void send_SDP_ServiceSearchRequest(uint8_t *continue_state, uint8_t cb);
 	void send_SDP_ServiceSearchAttributeRequest(uint8_t *continue_state, uint8_t cb);
+	uint16_t sdp_request_range_low_ = 0;
+	uint16_t sdp_reqest_range_high_ = 0xffff;
+	uint8_t *sdp_request_buffer_ = nullptr;
+	uint32_t sdp_request_buffer_cb_ = 0;
+	uint32_t sdp_request_buffer_used_cnt_ = 0; // cnt in bytes used.
+	volatile bool sdp_request_completed_ = true; 
 
 protected:
 	virtual bool claim(Device_t *device, int type, const uint8_t *descriptors, uint32_t len);
