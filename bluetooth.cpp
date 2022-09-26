@@ -1805,8 +1805,9 @@ void BluetoothController::process_l2cap_config_response(uint8_t *data) {
 		data[8]+((uint16_t)data[9] << 8), data[10]+((uint16_t)data[11] << 8));
 	if (scid == connections_[current_connection_].control_dcid_) {
 		// Set HID Boot mode
-		// Don't do if PS3...
-		if (!(connections_[current_connection_].device_driver_->special_process_required & BTHIDInput::SP_PS3_IDS)) {
+		// Don't do if PS3... Or if class told us not to
+		if (!connections_[current_connection_].use_hid_protocol_ &&
+			!(connections_[current_connection_].device_driver_->special_process_required & BTHIDInput::SP_PS3_IDS)) {
 			setHIDProtocol(HID_BOOT_PROTOCOL);  //
 		}
 		//setHIDProtocol(HID_RPT_PROTOCOL);  //HID_RPT_PROTOCOL
@@ -1861,6 +1862,10 @@ void BluetoothController::process_l2cap_disconnect_request(uint8_t *data) {
 
 }
 
+void BluetoothController::useHIDProtocol(bool useHID) {
+	// BUGBUG hopefully set at right time.
+	connections_[current_connection_].use_hid_protocol_ = useHID;
+}
 
 void BluetoothController::setHIDProtocol(uint8_t protocol) {
 	// Should verify protocol is boot or report

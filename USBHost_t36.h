@@ -1956,6 +1956,7 @@ public:
 		uint16_t		remote_man_;
 		uint8_t			remote_subv_;
 		uint8_t			connection_complete_ = false;	//
+		bool			use_hid_protocol_ = false; // 
 	} connection_info_t;
 
 	BluetoothController(USBHost &host, bool pair = false, const char *pin = "0000") : do_pair_device_(pair), pair_pincode_(pin), delayTimer_(this) 
@@ -1971,6 +1972,9 @@ public:
     enum {CONTROL_SCID=-1, INTERRUPT_SCID=-2, SDP_SCID=-3};
     void sendL2CapCommand(uint8_t* data, uint8_t nbytes, int channel = (int)0x0001);
     void connectToSDP(); // temp to see if we can do this later...
+	
+    // Force the setting one way or the other.  
+	void useHIDProtocol(bool useHID);
 
     // will be private
     bool startSDP_ServiceSearchAttributeRequest(uint16_t range_low, uint16_t range_high, uint8_t *buffer, uint32_t cb);
