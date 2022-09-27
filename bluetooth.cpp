@@ -30,8 +30,8 @@
 #define print   USBHost::print_
 #define println USBHost::println_//#define DEBUG_BT
 
-#define DEBUG_BT
-#define DEBUG_BT_VERBOSE
+//#define DEBUG_BT
+//#define DEBUG_BT_VERBOSE
 
 #ifndef DEBUG_BT
 #undef DEBUG_BT_VERBOSE
@@ -1806,9 +1806,12 @@ void BluetoothController::process_l2cap_config_response(uint8_t *data) {
 	if (scid == connections_[current_connection_].control_dcid_) {
 		// Set HID Boot mode
 		// Don't do if PS3... Or if class told us not to
-		if (!connections_[current_connection_].use_hid_protocol_ &&
-			!(connections_[current_connection_].device_driver_->special_process_required & BTHIDInput::SP_PS3_IDS)) {
-			setHIDProtocol(HID_BOOT_PROTOCOL);  //
+		if (!connections_[current_connection_].use_hid_protocol_) {
+			// don't call through Null pointer
+			if ((connections_[current_connection_].device_driver_ == nullptr) || 
+					!(connections_[current_connection_].device_driver_->special_process_required & BTHIDInput::SP_PS3_IDS)) {
+				setHIDProtocol(HID_BOOT_PROTOCOL);  //
+			}
 		}
 		//setHIDProtocol(HID_RPT_PROTOCOL);  //HID_RPT_PROTOCOL
 		if (do_pair_device_ && !(connections_[current_connection_].device_driver_ && (connections_[current_connection_].device_driver_->special_process_required & BTHIDInput::SP_DONT_NEED_CONNECT))) {
