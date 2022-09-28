@@ -71,6 +71,9 @@ bool BTHIDDumpController::process_bluetooth_HID_data(const uint8_t *data, uint16
 {
   Serial.printf("(BTHID(%p, %u): ", data, length );
   dump_hexbytes(data, length, 16);
+  if (decode_input_boot_data_) {
+    if (data[0] == 0x01) return decode_boot_keyboard(data + 1, length - 1);
+  }
   parse(0x0100 | data[0], data + 1, length - 1);
   return false;
 }
@@ -89,6 +92,32 @@ void BTHIDDumpController::connectionComplete(void)
   // here is where I am going to try to get data...
   Serial.println("\n$$$ connectionComplete" );
   connection_complete_ = true;
+}
+
+bool BTHIDDumpController::decode_boot_keyboard(const uint8_t *data, uint16_t length)
+{
+  // lets look through the bits for the modifier keys and print out the information.
+  Serial.println("Boot Mode Keyboard update:");
+  uint8_t mask = 0x01;
+  uint32_t usage;
+  for (usage = 0x700E0; mask; usage++) {
+    if (data[0] & mask) {
+      Serial.printf("usage=%X, value=1 ", usage);
+      printUsageInfo(usage >> 16, usage & 0xffff);
+      Serial.println();
+    }
+    mask <<= 1; // shift to next bit
+  }  
+  
+	for (uint16_t i=2; i < length; i++) {
+    if (data[i] != 0) {
+      Serial.printf("usage=%X, value=1 ", 0x70000 + data[i] );
+      printUsageInfo(0x7, data[i]);
+      Serial.println();
+    }
+  }
+	return true;
+  
 }
 
 //BUGBUG: move to class or ...
@@ -377,36 +406,49 @@ void BTHIDDumpController::decode_SDP_Data(void)
   // Start the search.
   // Maybe try setting to HID
   
+  Serial.println("Try force into HID mode");
+  btdriver_->updateHIDProtocol(0x01);
+  // give it a little time
+  delay(10);
+  USBHost::Task();
+  
   Serial.println("Start Deecode SDP Data - Full Range.");
   elapsedMillis em;
-  btdriver_->BluetoothController::startSDP_ServiceSearchAttributeRequest(0x00, 0xffff, sdp_buffer, sizeof(sdp_buffer));
-  while ((em < 2000) && !btdriver_->SDPRequestCompleted()) {
-    USBHost::Task();
-    delay(10);    
+  if (btdriver_->startSDP_ServiceSearchAttributeRequest(0x00, 0xffff, sdp_buffer, sizeof(sdp_buffer))) {
+    while ((em < 2000) && !btdriver_->SDPRequestCompleted()) {
+      USBHost::Task();
+      delay(10);    
+    }
+    if (!btdriver_->SDPRequestCompleted()) {
+      Serial.println("Error: Decide SDP Data timed out");
+    }
+    Serial.println("\n=========================== Verbose ==========================");
+    decode_SDP_buffer(true);
+    Serial.println("\n=========================== Structured ==========================");
+    decode_SDP_buffer(false);
+  } else {
+      Serial.println("Error: request failed");
+      decode_input_boot_data_ = true;
   }
-  if (!btdriver_->SDPRequestCompleted()) {
-    Serial.println("Error: Decide SDP Data timed out");
-  }
-  Serial.println("\n=========================== Verbose ==========================");
-  decode_SDP_buffer(true);
-  Serial.println("\n=========================== Structured ==========================");
-  decode_SDP_buffer(false);
-
   Serial.println("\nStart Deecode SDP Data - Just Report desciptor.");
   em = 0;
-  btdriver_->BluetoothController::startSDP_ServiceSearchAttributeRequest(0x206, 0x206, sdp_buffer, sizeof(sdp_buffer));
-  while ((em < 2000) && !btdriver_->SDPRequestCompleted()) {
-    USBHost::Task();
-    delay(10);    
-  }
-  if (!btdriver_->SDPRequestCompleted()) {
-    Serial.println("Error: Decide SDP Data timed out");
-  }
 
-  Serial.println("\n=========================== Verbose ==========================");
-  decode_SDP_buffer(true);
-  Serial.println("\n=========================== Structured ==========================");
-  decode_SDP_buffer(false);
+  if (btdriver_->startSDP_ServiceSearchAttributeRequest(0x206, 0x206, sdp_buffer, sizeof(sdp_buffer))) {
+    while ((em < 2000) && !btdriver_->SDPRequestCompleted()) {
+      USBHost::Task();
+      delay(10);    
+    }
+    if (!btdriver_->SDPRequestCompleted()) {
+      Serial.println("Error: Decide SDP Data timed out");
+    }
+
+    Serial.println("\n=========================== Verbose ==========================");
+    decode_SDP_buffer(true);
+    Serial.println("\n=========================== Structured ==========================");
+    decode_SDP_buffer(false);
+  } else {
+      Serial.println("Error: request failed");
+  }
   
   // Now real hack:
   // Lets see if we can now print out the report descriptor.

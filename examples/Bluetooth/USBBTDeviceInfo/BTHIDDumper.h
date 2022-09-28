@@ -45,6 +45,9 @@ private:
   void dumpHIDReportDescriptor(uint8_t *pb, uint16_t cb);
   void printUsageInfo(uint8_t usage_page, uint16_t usage);
   void print_input_output_feature_bits(uint8_t val);
+  
+  bool decode_boot_keyboard(const uint8_t *data, uint16_t length);
+
 
   // Stuff from USBHost HID parse code
   void parse(uint16_t type_and_report_id, const uint8_t *data, uint32_t len);
@@ -68,6 +71,8 @@ private:
   uint32_t index_;
   uint32_t fixed_usage_;
   volatile  bool connection_complete_ = false;
+  
+  bool decode_input_boot_data_ = false;
   
   uint32_t usage_ = 0;
   // Track changing fields. 

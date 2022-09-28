@@ -1492,6 +1492,8 @@ void BluetoothController::sendl2cap_DisconnectResponse(uint16_t handle, uint8_t 
 //=============================================================================
 bool BluetoothController::startSDP_ServiceSearchAttributeRequest(uint16_t range_low, uint16_t range_high, uint8_t *buffer, uint32_t cb)
 {
+	if (!connections_[current_connection_].sdp_connected_) return false;
+
 	sdp_request_range_low_ = range_low;
 	sdp_reqest_range_high_ = range_high;
 	sdp_request_buffer_ = buffer;
@@ -1686,6 +1688,7 @@ void BluetoothController::sendL2CapCommand(uint8_t* data, uint8_t nbytes, int ch
 
 // Experiment to see if we can get SDP connectin setup
 void BluetoothController::connectToSDP() {
+	DBGPrintf("$$$ BluetoothController::connectToSDP() Called\n");
 	connections_[current_connection_].connection_rxid_++;
 	sendl2cap_ConnectionRequest(connections_[current_connection_].device_connection_handle_, connections_[current_connection_].connection_rxid_, 
 		connections_[current_connection_].sdp_dcid_, SDP_PSM);
@@ -1750,10 +1753,11 @@ void BluetoothController::process_l2cap_connection_response(uint8_t *data) {
 
 	uint16_t scid = data[4]+((uint16_t)data[5] << 8); 
 	uint16_t dcid = data[6]+((uint16_t)data[7] << 8); 
+	uint16_t result = data[8]+((uint16_t)data[9] << 8);
 
 	DBGPrintf("    L2CAP Connection Response: ID: %d, Dest:%x, Source:%x, Result:%x, Status: %x pending control: %x %x\n",
 		data[1], scid, dcid,
-		data[8]+((uint16_t)data[9] << 8), data[10]+((uint16_t)data[11] << 8), pending_control_, pending_control_tx_);
+		result, data[10]+((uint16_t)data[11] << 8), pending_control_, pending_control_tx_);
 
 	// Experiment ignore if: pending_control_tx_ = STATE_TX_SEND_CONFIG_REQ;
 	if ((pending_control_tx_ == STATE_TX_SEND_CONFIG_REQ) || (pending_control_tx_ == STATE_TX_SEND_CONECT_RSP_SUCCESS)) {
@@ -1772,9 +1776,18 @@ void BluetoothController::process_l2cap_connection_response(uint8_t *data) {
 		DBGPrintf("      Control Response\n");
 		sendl2cap_ConfigRequest(connections_[current_connection_].device_connection_handle_, connections_[current_connection_].connection_rxid_, scid);
 	} else if (dcid == connections_[current_connection_].sdp_dcid_) {
-		connections_[current_connection_].sdp_scid_ = scid;
+		// Check for failure! 
 		DBGPrintf("      SDP Response\n");
-		sendl2cap_ConfigRequest(connections_[current_connection_].device_connection_handle_, connections_[current_connection_].connection_rxid_, scid);
+		if (result != 0) {
+			DBGPrintf("      Failed - No SDP!\n");
+			// Enable SCan to page mode
+			connections_[current_connection_].sdp_connected_ = false;
+			connections_[current_connection_].connection_complete_ = true;
+			sendHCIWriteScanEnable(2);
+		} else {
+			connections_[current_connection_].sdp_scid_ = scid;
+			sendl2cap_ConfigRequest(connections_[current_connection_].device_connection_handle_, connections_[current_connection_].connection_rxid_, scid);
+		}
 	}
 }
 
@@ -1834,6 +1847,7 @@ void BluetoothController::process_l2cap_config_response(uint8_t *data) {
 		// Enable SCan to page mode
 		DBGPrintf("    SDP configuration complete\n");
 		// Enable SCan to page mode
+		connections_[current_connection_].sdp_connected_ = true;
 		connections_[current_connection_].connection_complete_ = true;
 		sendHCIWriteScanEnable(2);
 	}

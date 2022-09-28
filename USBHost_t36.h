@@ -1957,6 +1957,7 @@ public:
 		uint8_t			remote_subv_;
 		uint8_t			connection_complete_ = false;	//
 		bool			use_hid_protocol_ = false; // 
+		bool			sdp_connected_ = false;
 	} connection_info_t;
 
 	BluetoothController(USBHost &host, bool pair = false, const char *pin = "0000") : do_pair_device_(pair), pair_pincode_(pin), delayTimer_(this) 
