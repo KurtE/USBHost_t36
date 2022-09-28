@@ -31,7 +31,7 @@
 #define println USBHost::println_//#define DEBUG_BT
 
 //#define DEBUG_BT
-//#define DEBUG_BT_VERBOSE
+#define DEBUG_BT_VERBOSE
 
 #ifndef DEBUG_BT
 #undef DEBUG_BT_VERBOSE
@@ -1868,6 +1868,12 @@ void BluetoothController::process_l2cap_disconnect_request(uint8_t *data) {
 void BluetoothController::useHIDProtocol(bool useHID) {
 	// BUGBUG hopefully set at right time.
 	connections_[current_connection_].use_hid_protocol_ = useHID;
+}
+
+// Hack to see if I can update it later
+void BluetoothController::updateHIDProtocol(uint8_t protocol) {
+	pending_control_tx_ = 0; // make sure we are not processing this...
+	setHIDProtocol(protocol);
 }
 
 void BluetoothController::setHIDProtocol(uint8_t protocol) {

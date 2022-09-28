@@ -1975,6 +1975,7 @@ public:
 	
     // Force the setting one way or the other.  
 	void useHIDProtocol(bool useHID);
+	void updateHIDProtocol(uint8_t protocol);
 
     // will be private
     bool startSDP_ServiceSearchAttributeRequest(uint16_t range_low, uint16_t range_high, uint8_t *buffer, uint32_t cb);
