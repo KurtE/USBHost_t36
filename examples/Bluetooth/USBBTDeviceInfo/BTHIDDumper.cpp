@@ -59,7 +59,7 @@ bool BTHIDDumpController::claim_bluetooth(BluetoothController *driver, uint32_t 
 		Serial.printf("BTHIDDumpController::claim_bluetooth TRUE\n");
 		btdriver_ = driver;
 		btdevice = (Device_t*)driver;	// remember this way 
-
+    bluetooth_class_low_byte_ = bluetooth_class & 0xff;  // remember which HID type... 
     // experiment if we want to allow the device to stay in HID mode
     //driver->useHIDProtocol(true);
 		return true;
@@ -72,17 +72,30 @@ bool BTHIDDumpController::process_bluetooth_HID_data(const uint8_t *data, uint16
   Serial.printf("(BTHID(%p, %u): ", data, length );
   dump_hexbytes(data, length, 16);
   if (decode_input_boot_data_) {
-    if (data[0] == 0x01) return decode_boot_keyboard(data + 1, length - 1);
+    if (data[0] == 0x01) return decode_boot_report1(data + 1, length - 1);
   }
   parse(0x0100 | data[0], data + 1, length - 1);
   return false;
 }
 void BTHIDDumpController::release_bluetooth()
 {
+	Serial.println("BTHIDDumpController Controller::release_bluetooth");
+  btdevice = nullptr;    
+  connection_complete_ = true;
+  driver_ = nullptr;
+	btdriver_ = nullptr;
+  decode_input_boot_data_ = false;
   
 }
+
 bool BTHIDDumpController::remoteNameComplete(const uint8_t *remoteName)
 {
+	// From Joystick.  Lets see if we need to do some special connecting...
+	if (strncmp((const char *)remoteName, "Wireless Controller", 19) == 0) {
+		Serial.printf("  (%s)PS4 Try special connection order\n", remoteName);
+    //special_process_required = SP_NEED_CONNECT;
+  }
+
   return true;
 }
 
@@ -94,27 +107,35 @@ void BTHIDDumpController::connectionComplete(void)
   connection_complete_ = true;
 }
 
-bool BTHIDDumpController::decode_boot_keyboard(const uint8_t *data, uint16_t length)
+bool BTHIDDumpController::decode_boot_report1(const uint8_t *data, uint16_t length)
 {
+  // Lets see if keyboard type: 
   // lets look through the bits for the modifier keys and print out the information.
-  Serial.println("Boot Mode Keyboard update:");
-  uint8_t mask = 0x01;
-  uint32_t usage;
-  for (usage = 0x700E0; mask; usage++) {
-    if (data[0] & mask) {
-      Serial.printf("usage=%X, value=1 ", usage);
-      printUsageInfo(usage >> 16, usage & 0xffff);
-      Serial.println();
+  if (bluetooth_class_low_byte_ & 0x40) {
+    Serial.println("Boot Mode Keyboard update:");
+    uint8_t mask = 0x01;
+    uint32_t usage;
+    for (usage = 0x700E0; mask; usage++) {
+      if (data[0] & mask) {
+        Serial.printf("usage=%X, value=1 ", usage);
+        printUsageInfo(usage >> 16, usage & 0xffff);
+        Serial.println();
+      }
+      mask <<= 1; // shift to next bit
+    }  
+    
+    for (uint16_t i=2; i < length; i++) {
+      if (data[i] != 0) {
+        Serial.printf("usage=%X, value=1 ", 0x70000 + data[i] );
+        printUsageInfo(0x7, data[i]);
+        Serial.println();
+      }
     }
-    mask <<= 1; // shift to next bit
-  }  
-  
-	for (uint16_t i=2; i < length; i++) {
-    if (data[i] != 0) {
-      Serial.printf("usage=%X, value=1 ", 0x70000 + data[i] );
-      printUsageInfo(0x7, data[i]);
-      Serial.println();
-    }
+    
+  } else if ((bluetooth_class_low_byte_ == 0x4) || (bluetooth_class_low_byte_ == 0x8) || (bluetooth_class_low_byte_ == 0xc)) {
+    // Joystick, or gamepad or remote control
+    Serial.println("Joystick RPT1 update: ");
+    dump_hexbytes(data, length, 22);
   }
 	return true;
   
@@ -401,20 +422,35 @@ void BTHIDDumpController::decode_SDP_buffer(bool verbose_output) {
   }
 }
 
-void BTHIDDumpController::decode_SDP_Data(void)
+void BTHIDDumpController::decode_SDP_Data(bool by_user_command)
 {
   // Start the search.
   // Maybe try setting to HID
-  
-  Serial.println("Try force into HID mode");
-  btdriver_->updateHIDProtocol(0x01);
-  // give it a little time
-  delay(10);
-  USBHost::Task();
-  
+  //return;
+    if (!by_user_command) {
+    Serial.println("Try force into HID mode");
+    btdriver_->updateHIDProtocol(0x01);
+    // give it a little time
+    delay(10);
+    USBHost::Task();
+  }  
+
   Serial.println("Start Deecode SDP Data - Full Range.");
   elapsedMillis em;
-  if (btdriver_->startSDP_ServiceSearchAttributeRequest(0x00, 0xffff, sdp_buffer, sizeof(sdp_buffer))) {
+
+  bool sdp_attributeSearch_started = btdriver_->startSDP_ServiceSearchAttributeRequest(0x00, 0xffff, sdp_buffer, sizeof(sdp_buffer));
+  if (!sdp_attributeSearch_started && by_user_command) {
+    Serial.println("*** SDP_ServiceSearchAttributeRequest failed try to do connect to SDP again");
+    btdriver_->connectToSDP();  // see if we can try to startup SDP after
+    for (uint8_t i = 0; i < 10; i++ ) {
+      USBHost::Task();
+      delay(2);    
+    }
+    sdp_attributeSearch_started = btdriver_->startSDP_ServiceSearchAttributeRequest(0x00, 0xffff, sdp_buffer, sizeof(sdp_buffer));
+  }
+  
+  
+  if (sdp_attributeSearch_started) {
     while ((em < 2000) && !btdriver_->SDPRequestCompleted()) {
       USBHost::Task();
       delay(10);    

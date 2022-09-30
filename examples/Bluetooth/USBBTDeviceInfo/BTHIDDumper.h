@@ -29,7 +29,7 @@ public:
   int extract_next_SDP_Token(uint8_t *pbElement, int cb_left, sdp_element_t &sdpe);
   void print_sdpe_val(sdp_element_t &sdpe, bool verbose);
   void decode_SDP_buffer(bool verbose_output = false);
-  void decode_SDP_Data(void);
+  void decode_SDP_Data(bool by_user_command);
   
 	virtual operator bool() { return ((btdevice != nullptr) && connection_complete_); } // experiment to see if overriding makes sense here
 protected:
@@ -46,7 +46,7 @@ private:
   void printUsageInfo(uint8_t usage_page, uint16_t usage);
   void print_input_output_feature_bits(uint8_t val);
   
-  bool decode_boot_keyboard(const uint8_t *data, uint16_t length);
+  bool decode_boot_report1(const uint8_t *data, uint16_t length);
 
 
   // Stuff from USBHost HID parse code
@@ -73,6 +73,7 @@ private:
   volatile  bool connection_complete_ = false;
   
   bool decode_input_boot_data_ = false;
+  uint8_t bluetooth_class_low_byte_ = 0;
   
   uint32_t usage_ = 0;
   // Track changing fields. 

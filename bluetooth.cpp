@@ -346,7 +346,7 @@ void BluetoothController::disconnect()
 		connections_[current_connection_].device_driver_->remote_name_[0] = 0;
 		connections_[current_connection_].device_driver_ = nullptr;
 	}
-	connections_[current_connection_].connection_complete_ = false;
+	connections_[current_connection_].connection_complete_ = 0;
 }
 
 void BluetoothController::timer_event(USBDriverTimer *whichTimer)
@@ -591,9 +591,10 @@ void BluetoothController::handle_hci_command_complete()
 		case HCI_WRITE_SCAN_ENABLE:				//0x0c1a
 			DBGPrintf("Write_Scan_enable Completed\n");
 			// See if we have driver and a remote
-			if (connections_[current_connection_].device_driver_ && connections_[current_connection_].connection_complete_) {	// We have a driver call their 
+			if (connections_[current_connection_].device_driver_
+					&& (connections_[current_connection_].connection_complete_ == CCON_ALL)) {	// We have a driver call their 
 				connections_[current_connection_].device_driver_->connectionComplete();
-				connections_[current_connection_].connection_complete_ = false;	// only call once
+				connections_[current_connection_].connection_complete_ = 0;	// only call once
 			}
 			break;
 		case HCI_WRITE_SSP_MODE:					//0x0c56
@@ -605,10 +606,10 @@ void BluetoothController::handle_hci_command_complete()
 		case HCI_LE_SET_SCAN_RSP_DATA:			//0x2009
 			break;
 		case HCI_LINK_KEY_NEG_REPLY:
-			if (connections_[current_connection_].device_class_ == 0x2508)	{
-				DBGPrintf("Hack see if we can catch the Terios here");
-				pending_control_ = PC_CONNECT_AFTER_SDP_DISCONNECT;
-			}
+			//if (connections_[current_connection_].device_class_ == 0x2508)	{
+			//	DBGPrintf("Hack see if we can catch the Terios here");
+			//	pending_control_ = PC_CONNECT_AFTER_SDP_DISCONNECT;
+			//}
 			break;
 
 	}
@@ -946,11 +947,22 @@ void BluetoothController::handle_hci_incoming_connect() {
 		}
 		if (count_connections_ < MAX_CONNECTIONS) current_connection_ = count_connections_++;
 
+		// Lets reinitialize some of the fields of this back to startup settings.
+		connections_[current_connection_].device_driver_ = nullptr;;
+		connections_[current_connection_].connection_rxid_ = 0;
+		connections_[current_connection_].control_dcid_ = 0x70;
+		connections_[current_connection_].interrupt_dcid_ = 0x71;
+		connections_[current_connection_].sdp_dcid_ = 0x40;	
+		connections_[current_connection_].connection_complete_ = 0;	
+		connections_[current_connection_].use_hid_protocol_ = false; 
+		connections_[current_connection_].sdp_connected_ = false;
+
 		connections_[current_connection_].device_driver_ = find_driver(class_of_device);
 
 		// We need to save away the BDADDR and class link type?
 		for(uint8_t i=0; i<6; i++) connections_[current_connection_].device_bdaddr_[i] = rxbuf_[i+2];
 		connections_[current_connection_].device_class_ = class_of_device;	
+
 		sendHCIRemoteNameRequest();
 	}
 
@@ -1782,8 +1794,9 @@ void BluetoothController::process_l2cap_connection_response(uint8_t *data) {
 			DBGPrintf("      Failed - No SDP!\n");
 			// Enable SCan to page mode
 			connections_[current_connection_].sdp_connected_ = false;
-			connections_[current_connection_].connection_complete_ = true;
-			sendHCIWriteScanEnable(2);
+			connections_[current_connection_].connection_complete_ |= CCON_SDP;
+			if (connections_[current_connection_].connection_complete_ == CCON_ALL)
+				sendHCIWriteScanEnable(2);
 		} else {
 			connections_[current_connection_].sdp_scid_ = scid;
 			sendl2cap_ConfigRequest(connections_[current_connection_].device_connection_handle_, connections_[current_connection_].connection_rxid_, scid);
@@ -1836,6 +1849,7 @@ void BluetoothController::process_l2cap_config_response(uint8_t *data) {
 		} else {
 			pending_control_ = 0;
 		}
+		connections_[current_connection_].connection_complete_ |= CCON_CONT;
 	} else if (scid == connections_[current_connection_].interrupt_dcid_) {
 		// Lets try SDP connectin 
 		connectToSDP(); // temp to see if we can do this later...
@@ -1843,12 +1857,16 @@ void BluetoothController::process_l2cap_config_response(uint8_t *data) {
 		// Enable SCan to page mode
 		//connections_[current_connection_].connection_complete_ = true;
 		//sendHCIWriteScanEnable(2);
+		connections_[current_connection_].connection_complete_ |= CCON_INT;
 	} else if (scid == connections_[current_connection_].sdp_dcid_) {
 		// Enable SCan to page mode
 		DBGPrintf("    SDP configuration complete\n");
 		// Enable SCan to page mode
+		connections_[current_connection_].connection_complete_ |= CCON_SDP;
 		connections_[current_connection_].sdp_connected_ = true;
-		connections_[current_connection_].connection_complete_ = true;
+	}
+
+	if (connections_[current_connection_].connection_complete_ == CCON_ALL) {
 		sendHCIWriteScanEnable(2);
 	}
 }
@@ -1872,6 +1890,7 @@ void BluetoothController::process_l2cap_disconnect_request(uint8_t *data) {
 		DBGPrintf("      Interrupt disconnect request\n");
 	} else if (dcid == connections_[current_connection_].sdp_dcid_) {
 		DBGPrintf("      SDP disconnect request\n");
+		connections_[current_connection_].sdp_connected_ = false; // say we are not connected 
 		sendl2cap_DisconnectResponse(connections_[current_connection_].device_connection_handle_, data[1], 
 			connections_[current_connection_].sdp_dcid_,
 			connections_[current_connection_].sdp_scid_);
@@ -2028,4 +2047,3 @@ void BluetoothController::process_sdp_service_search_attribute_response(uint8_t 
 
 	}
 }
-

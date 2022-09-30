@@ -1955,7 +1955,7 @@ public:
 		uint8_t    		remote_ver_;
 		uint16_t		remote_man_;
 		uint8_t			remote_subv_;
-		uint8_t			connection_complete_ = false;	//
+		uint8_t			connection_complete_ = 0;	//
 		bool			use_hid_protocol_ = false; // 
 		bool			sdp_connected_ = false;
 	} connection_info_t;
@@ -1971,6 +1971,7 @@ public:
 
 	// BUGBUG version to allow some of the controlled objects to call?
     enum {CONTROL_SCID=-1, INTERRUPT_SCID=-2, SDP_SCID=-3};
+    enum {CCON_INT=0x01, CCON_CONT=0x02, CCON_SDP=0x04, CCON_ALL=0x07};
     void sendL2CapCommand(uint8_t* data, uint8_t nbytes, int channel = (int)0x0001);
     void connectToSDP(); // temp to see if we can do this later...
 	

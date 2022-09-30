@@ -61,6 +61,7 @@ void setup()
   Serial.println("\n*** You can control the output by simple character input to Serial ***");
   Serial.println("R - Turns on or off showing the raw data");
   Serial.println("C - Toggles showing changed data only on or off");
+  Serial.println("S - Try connecting and printing SDP data again");
   Serial.println("<anything else> - toggles showing the Hid formatted breakdown of the data\n");
 
   myusb.begin();
@@ -83,6 +84,11 @@ void loop()
         BTHIDDumpController::show_raw_data = true;
         Serial.println("\n*** Turn on RAW output ***\n");
       }
+    } else if (ch == 'S' || (ch == 's')) {
+      Serial.println("\n>>>>>>>>>> Try to decode SDP Data <<<<<<<<<<");
+      if (hdc1) hdc1.decode_SDP_Data(true);
+      if (hdc2) hdc2.decode_SDP_Data(true);
+      
     } else if (ch == 'C' || (ch == 'c')) {
       if (BTHIDDumpController::changed_data_only) {
         BTHIDDumpController::changed_data_only = false;
@@ -142,7 +148,7 @@ void loop()
         if (psz && *psz) Serial.printf("  Serial: %s\n", psz);
         
         // lets dump the SDP data
-        bthiddrivers[i]->decode_SDP_Data();
+        bthiddrivers[i]->decode_SDP_Data(false);
       }
     }
   }
