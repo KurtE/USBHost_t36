@@ -486,7 +486,7 @@ void BTHIDSupport::dump_hexbytes(const void *ptr, uint32_t len, uint32_t indent)
 }
 
 
-void indent_level(int level) {
+static void indent_level(int level) {
   if ((level > 5) || (level < 0)) return;  // bail if something is off...
   while (level--) Serial.print("  ");
 }

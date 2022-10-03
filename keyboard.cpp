@@ -438,7 +438,7 @@ bool KeyboardController::hid_process_in_data(const Transfer_t *transfer)
 
 void KeyboardController::hid_input_begin(uint32_t topusage, uint32_t type, int lgmin, int lgmax)
 {
-	USBHDBGSerial.printf("KPC:hid_input_begin TUSE: %x TYPE: %x Range:%x %x\n", topusage, type, lgmin, lgmax);
+	//USBHDBGSerial.printf("KPC:hid_input_begin TUSE: %x TYPE: %x Range:%x %x\n", topusage, type, lgmin, lgmax);
 	topusage_ = topusage;	// remember which report we are processing. 
 	topusage_type_ = type;
 	topusage_index_ = 2;  // hack we ignore first two bytes	
@@ -449,7 +449,7 @@ void KeyboardController::hid_input_begin(uint32_t topusage, uint32_t type, int l
 void KeyboardController::hid_input_data(uint32_t usage, int32_t value)
 {
 	// Hack ignore 0xff00 high words as these are user values... 
-	USBHDBGSerial.printf("KeyboardController: topusage= %x usage=%X, value=%d\n", topusage_, usage, value);
+	//USBHDBGSerial.printf("KeyboardController: topusage= %x usage=%X, value=%d\n", topusage_, usage, value);
 	if ((usage & 0xffff0000) == 0xff000000) return; 
 	// If this is the TOPUSAGE_KEYBOARD do in it's own function
 	if (process_hid_keyboard_data(usage, value))
@@ -494,9 +494,12 @@ bool KeyboardController::process_hid_keyboard_data(uint32_t usage, int32_t value
 {
 	print("process_hid_keyboard_data Usage: ", usage, HEX);
 	println(" value: ", value);
-	USBHDBGSerial.printf("process_hid_keyboard_data %x=%d\n", usage, value);
+	//USBHDBGSerial.printf("process_hid_keyboard_data %x=%d\n", usage, value);
 
-	if ((topusage_ & 0xffff0000) != (TOPUSAGE_KEYBOARD & 0xffff0000)) return false;
+	if ((topusage_ & 0xffff0000) != (TOPUSAGE_KEYBOARD & 0xffff0000)) {
+		//USBHDBGSerial.printf("\tNot TopUsage  %x %x\n", topusage_, TOPUSAGE_KEYBOARD);
+		return false;
+	}
 	// Lets first process modifier keys...
 	// usage=700E0, value=0 (Left Control)
 	// usage=700E1, value=0 (Left Shift)
@@ -521,6 +524,8 @@ bool KeyboardController::process_hid_keyboard_data(uint32_t usage, int32_t value
 				modifiers_ &= ~keybit;
 			}
 		}
+
+		//USBHDBGSerial.printf("\tUpdated Modifer %x\n", modifiers_);
 		return true;
 	}
 
@@ -563,7 +568,7 @@ bool KeyboardController::process_hid_keyboard_data(uint32_t usage, int32_t value
 
 void KeyboardController::hid_input_end()
 {
-	USBHDBGSerial.printf("KPC:hid_input_end %u %u\n", hid_input_begin_, hid_input_data_);
+	//USBHDBGSerial.printf("KPC:hid_input_end %u %u\n", hid_input_begin_, hid_input_data_);
 	if (hid_input_begin_) {
 		if (!keyboard_uses_boot_format_ && ((topusage_type_ & 0x2) == 0) && (topusage_index_ > 2)) {
 			// we have boot data.
@@ -637,6 +642,9 @@ bool KeyboardController::process_bluetooth_HID_data(const uint8_t *data, uint16_
 
 	for (uint8_t i = 0; i < length; i++) USBHDBGSerial.printf(" %02X", data[i]); 
 	USBHDBGSerial.printf("\n");
+
+	// BUGBUG - assume boot format
+	keyboard_uses_boot_format_  = true;
 
 	if (bthids_.process_bluetooth_HID_data(data, length)) return true;
 
