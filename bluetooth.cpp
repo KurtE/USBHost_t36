@@ -30,7 +30,7 @@
 #define print   USBHost::print_
 #define println USBHost::println_//#define DEBUG_BT
 
-//#define DEBUG_BT
+#define DEBUG_BT
 #define DEBUG_BT_VERBOSE
 
 #ifndef DEBUG_BT
@@ -2041,8 +2041,12 @@ void BluetoothController::process_sdp_service_search_attribute_response(uint8_t 
 	sdp_request_buffer_used_cnt_ += cb_data;
 
 	// Now see if we are done or not, if not start up next request
-	if ((cb_cont == 0) || (sdp_request_buffer_used_cnt_ == sdp_request_buffer_cb_)) sdp_request_completed_ = true;
-	else {
+	if ((cb_cont == 0) || (sdp_request_buffer_used_cnt_ == sdp_request_buffer_cb_)) {
+		sdp_request_completed_ = true;
+		if (connections_[current_connection_].device_driver_) {
+			connections_[current_connection_].device_driver_->sdp_command_completed(true); // We skip the first byte...
+		}
+	} else {
 		send_SDP_ServiceSearchAttributeRequest(pb_cont, cb_cont);
 
 	}

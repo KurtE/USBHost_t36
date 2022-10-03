@@ -127,6 +127,14 @@ void KeyboardController::init()
 
 void KeyboardController::forceBootProtocol()
 {
+	// handle bluetooth connection
+	if (btdriver_) btdriver_->updateHIDProtocol(0x00);
+
+	if (driver_[0] != nullptr) {
+		// Only do it this way if we are a standard USB device
+	    driver_[0]->sendControlPacket(0x21, 11, 0, 0, 0, nullptr); // 11=SET_PROTOCOL  BOOT
+	}
+	
 #if 0
 	if (device && !control_queued) {
 		mk_setup(setup, 0x21, 11, 0, 0, 0); // 11=SET_PROTOCOL  BOOT
@@ -136,6 +144,12 @@ void KeyboardController::forceBootProtocol()
 		force_boot_protocol = true;	// let system know we want to force this.
 	}
 #endif
+}
+
+void KeyboardController::forceHIDProtocol() 
+{
+	if (btdriver_) btdriver_->updateHIDProtocol(0x01);
+
 }
 
 
@@ -283,8 +297,15 @@ void KeyboardController::updateLEDS() {
 	if (driver_[0] != nullptr) {
 		// Only do it this way if we are a standard USB device
 	    driver_[0]->sendControlPacket(0x21, 9, 0x200, 0, sizeof(leds_.byte), (void*) &leds_.byte); 
-	} else {
+	} else if (btdriver_ != nullptr) {
 		// Bluetooth, need to setup back channel to Bluetooth controller. 
+        uint8_t packet[3];
+        packet[0] = 0xA2; // HID BT DATA_request (0xA0) | Report Type (Output 0x02)
+        packet[1] = 0x01; // Report ID
+        packet[2] = leds_.byte;
+        delay(1);
+     	btdriver_->sendL2CapCommand(packet, sizeof(packet), BluetoothController::INTERRUPT_SCID);
+
 	}
 }
 
@@ -417,7 +438,7 @@ bool KeyboardController::hid_process_in_data(const Transfer_t *transfer)
 
 void KeyboardController::hid_input_begin(uint32_t topusage, uint32_t type, int lgmin, int lgmax)
 {
-	//USBHDBGSerial.printf("KPC:hid_input_begin TUSE: %x TYPE: %x Range:%x %x\n", topusage, type, lgmin, lgmax);
+	USBHDBGSerial.printf("KPC:hid_input_begin TUSE: %x TYPE: %x Range:%x %x\n", topusage, type, lgmin, lgmax);
 	topusage_ = topusage;	// remember which report we are processing. 
 	topusage_type_ = type;
 	topusage_index_ = 2;  // hack we ignore first two bytes	
@@ -428,7 +449,7 @@ void KeyboardController::hid_input_begin(uint32_t topusage, uint32_t type, int l
 void KeyboardController::hid_input_data(uint32_t usage, int32_t value)
 {
 	// Hack ignore 0xff00 high words as these are user values... 
-	//USBHDBGSerial.printf("KeyboardController: topusage= %x usage=%X, value=%d\n", topusage_, usage, value);
+	USBHDBGSerial.printf("KeyboardController: topusage= %x usage=%X, value=%d\n", topusage_, usage, value);
 	if ((usage & 0xffff0000) == 0xff000000) return; 
 	// If this is the TOPUSAGE_KEYBOARD do in it's own function
 	if (process_hid_keyboard_data(usage, value))
@@ -473,7 +494,7 @@ bool KeyboardController::process_hid_keyboard_data(uint32_t usage, int32_t value
 {
 	print("process_hid_keyboard_data Usage: ", usage, HEX);
 	println(" value: ", value);
-	//USBHDBGSerial.printf("process_hid_keyboard_data %x=%d\n", usage, value);
+	USBHDBGSerial.printf("process_hid_keyboard_data %x=%d\n", usage, value);
 
 	if ((topusage_ & 0xffff0000) != (TOPUSAGE_KEYBOARD & 0xffff0000)) return false;
 	// Lets first process modifier keys...
@@ -542,7 +563,7 @@ bool KeyboardController::process_hid_keyboard_data(uint32_t usage, int32_t value
 
 void KeyboardController::hid_input_end()
 {
-	//USBHDBGSerial.printf("KPC:hid_input_end %u %u\n", hid_input_begin_, hid_input_data_);
+	USBHDBGSerial.printf("KPC:hid_input_end %u %u\n", hid_input_begin_, hid_input_data_);
 	if (hid_input_begin_) {
 		if (!keyboard_uses_boot_format_ && ((topusage_type_ & 0x2) == 0) && (topusage_index_ > 2)) {
 			// we have boot data.
@@ -573,11 +594,18 @@ bool KeyboardController::claim_bluetooth(BluetoothController *driver, uint32_t b
 		if (remoteName && (strncmp((const char *)remoteName, "PLAYSTATION(R)3", 15) == 0)) {
 			//USBHDBGSerial.printf("KeyboardController::claim_bluetooth Reject PS3 hack\n");
 			btdevice = nullptr;	// remember this way 
+			btdriver_ = driver;
 
 			return false;
 		}
 		USBHDBGSerial.printf("KeyboardController::claim_bluetooth TRUE\n");
 		btdevice = (Device_t*)driver;	// remember this way 
+
+		// Test to link in BT HID parser code
+		driver->useHIDProtocol(true);
+		bthids_.setDriver(driver);
+		bthids_.setUSBHIDInput(this);
+
 		return true;
 	}
 	return false;
@@ -606,33 +634,44 @@ bool KeyboardController::process_bluetooth_HID_data(const uint8_t *data, uint16_
 	//BT rx2_data(18): 48 20 e 0 a 0 70 0 a1 1 2 0 0 0 0 0 0 0 
 	// So Len=9 passed in data starting at report ID=1... 
 	USBHDBGSerial.printf("KBD::process_bluetooth_HID_data: ");
+
 	for (uint8_t i = 0; i < length; i++) USBHDBGSerial.printf(" %02X", data[i]); 
 	USBHDBGSerial.printf("\n");
 
+	if (bthids_.process_bluetooth_HID_data(data, length)) return true;
+
 
 	if (data[0] != 1) return false;
-	print("  KB Data: ");
-	print_hexbytes(data, length);
-	for (int i=2; i < length; i++) {
-		uint32_t key = prev_report_[i];
-		if (key >= 4 && !contains(key, &data[1])) {
-			key_release(prev_report_[0], key);
-		}
-	}
-	for (int i=2; i < 8; i++) {
-		uint32_t key = data[i];
-		if (key >= 4 && !contains(key, prev_report_)) {
-			key_press(data[1], key);
-		}
-	}
-	// Save away the data.. But shift down one byte... Don't need the report number
-	memcpy(prev_report_, &data[1], 8);
+
+	// See if we can simply use our boot format code to process skip the report ID.
+	process_boot_keyboard_format(&data[1], true);
 	return true;
 }
 
 void KeyboardController::release_bluetooth() 
 {
 	btdevice = nullptr;
+}
+
+
+//=============================================================================
+// More bluetooth stuff!
+//=============================================================================
+void KeyboardController::connectionComplete(void)
+{
+  // here is where I am going to try to get data...
+  println("\n$$$ connectionComplete" );
+  //connection_complete_ = true;
+  if (bthids_.startRetrieveHIDReportDescriptor())
+  	println("*** Loaded Bluetooth Report Descriptor ***");
+}
+
+void KeyboardController::sdp_command_completed (bool success) {
+  if (bthids_.completeSDPRequest(success))
+  	println("*** Loaded Bluetooth Report Descriptor ***");
+  else
+  	println("*** Failed Bluetooth Report Descriptor ***");
+
 }
 
 //*****************************************************************************
@@ -690,3 +729,4 @@ void KeyboardController::print_hexbytes(const void *ptr, uint32_t len)
 	USBHDBGSerial.println();
 }
 #endif
+

@@ -31,6 +31,7 @@
 #endif
 #include "utility/imxrt_usbhs.h"
 #include "utility/msc.h"
+#include "BTHIDSupport.h"
 
 // Dear inquisitive reader, USB is a complex protocol defined with
 // very specific terminology.  To have any chance of understand this
@@ -535,6 +536,7 @@ private:
 	virtual void hid_timer_event(USBDriverTimer *whichTimer) { }
 	USBHIDInput *next = NULL;
 	friend class USBHIDParser;
+	friend class BTHIDSupport;
 protected:
 	Device_t *mydevice = NULL;
 };
@@ -561,6 +563,7 @@ private:
 	virtual void release_bluetooth() {};
 	virtual bool remoteNameComplete(const uint8_t *remoteName) {return true;}
 	virtual void connectionComplete(void) {};
+	virtual void sdp_command_completed (bool success) {};
 	BTHIDInput *next = NULL;
 	friend class BluetoothController;
 protected:
@@ -747,7 +750,6 @@ typedef union {
 public:
 	KeyboardController(USBHost &host) { init(); }
 	KeyboardController(USBHost *host) { init(); }
-
 	// need their own versions as both USBDriver and USBHIDInput provide
 	uint16_t idVendor();
 	uint16_t idProduct();
@@ -778,6 +780,7 @@ public:
 	void     attachExtrasPress(void (*f)(uint32_t top, uint16_t code)) { extrasKeyPressedFunction = f; }
 	void     attachExtrasRelease(void (*f)(uint32_t top, uint16_t code)) { extrasKeyReleasedFunction = f; }
 	void	 forceBootProtocol();
+	void	 forceHIDProtocol();
 	enum {MAX_KEYS_DOWN=4};
 
 protected:
@@ -788,6 +791,8 @@ protected:
 	virtual bool process_bluetooth_HID_data(const uint8_t *data, uint16_t length);
 	virtual bool remoteNameComplete(const uint8_t *remoteName);
 	virtual void release_bluetooth();
+	virtual void connectionComplete(void);
+	virtual void sdp_command_completed (bool success);
 
 
 protected:	// HID functions for extra keyboard data. 
@@ -919,8 +924,13 @@ private:
 	bool 	force_boot_protocol;  // User or VID/PID said force boot protocol?
 	bool control_queued = false;
 	// keep back pointer for the three different op levels we claim
+	BluetoothController *btdriver_ = nullptr;
 	USBHIDParser *driver_[3] = {nullptr, nullptr, nullptr};
 	static bool s_forceHIDMode;
+  	
+  	// Test probably temporary Bluetooth HID support object
+	BTHIDSupport bthids_;
+
 };
 
 

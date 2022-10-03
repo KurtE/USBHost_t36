@@ -11,8 +11,12 @@
 USBHost myusb;
 USBHub hub1(myusb);
 KeyboardController keyboard1(myusb);
+//BluetoothController bluet(myusb, true, "0000");   // Version does pairing to device
+BluetoothController bluet(myusb);   // version assumes it already was paired
+
 USBHIDParser hid1(myusb);
 USBHIDParser hid2(myusb);
+USBHIDParser hid3(myusb);
 
 uint8_t keyboard_modifiers = 0;  // try to keep a reasonable value
 #ifdef KEYBOARD_INTERFACE
@@ -134,9 +138,9 @@ void OnRawRelease(uint8_t keycode) {
 // Device and Keyboard Output To Serial objects...
 //=============================================================
 #ifdef SHOW_KEYBOARD_DATA
-USBDriver *drivers[] = {&hub1, &hid1, &hid2};
+USBDriver *drivers[] = {&hub1, &hid1, &hid2, &hid3, &bluet};
 #define CNT_DEVICES (sizeof(drivers)/sizeof(drivers[0]))
-const char * driver_names[CNT_DEVICES] = {"Hub1", "HID1" , "HID2"};
+const char * driver_names[CNT_DEVICES] = {"Hub1", "HID1" , "HID2", "HID3", "BlueTooth"};
 bool driver_active[CNT_DEVICES] = {false, false, false};
 
 // Lets also look at HID Input devices
@@ -144,6 +148,12 @@ USBHIDInput *hiddrivers[] = { &keyboard1 };
 #define CNT_HIDDEVICES (sizeof(hiddrivers) / sizeof(hiddrivers[0]))
 const char *hid_driver_names[CNT_DEVICES] = { "KB" };
 bool hid_driver_active[CNT_DEVICES] = { false };
+
+BTHIDInput *bthiddrivers[] = {&keyboard1};
+#define CNT_BTHIDDEVICES (sizeof(bthiddrivers)/sizeof(bthiddrivers[0]))
+const char * bthid_driver_names[CNT_HIDDEVICES] = {"KB(BT)"};
+bool bthid_driver_active[CNT_HIDDEVICES] = {false};
+
 
 #endif
 
@@ -189,17 +199,33 @@ void ShowUpdatedDeviceListInfo()
         // can try forcing the keyboard into boot mode.
         if (hiddrivers[i] == &keyboard1) {
           // example Gigabyte uses N key rollover which should now work, but...
-          #if 0
-          if (keyboard1.idVendor() == 0x04D9) {
-            Serial.println("Gigabyte vendor: force boot protocol");
-            // Gigabyte keyboard
-            keyboard1.forceBootProtocol();
-          }
-          #endif
         }
       }
     }
   }
+  for (uint8_t i = 0; i < CNT_BTHIDDEVICES; i++) {
+    if (*bthiddrivers[i] != bthid_driver_active[i]) {
+      if (bthid_driver_active[i]) {
+        Serial.printf("*** BTHID Device %s - disconnected ***\n", bthid_driver_names[i]);
+        bthid_driver_active[i] = false;
+      } else {
+        Serial.printf("*** BTHID Device %s %x:%x - connected ***\n", bthid_driver_names[i], bthiddrivers[i]->idVendor(), bthiddrivers[i]->idProduct());
+        bthid_driver_active[i] = true;
+        const uint8_t *psz = bthiddrivers[i]->manufacturer();
+        if (psz && *psz) Serial.printf("  manufacturer: %s\n", psz);
+        psz = bthiddrivers[i]->product();
+        if (psz && *psz) Serial.printf("  product: %s\n", psz);
+        psz = bthiddrivers[i]->serialNumber();
+        if (psz && *psz) Serial.printf("  Serial: %s\n", psz);
+        if (bthiddrivers[i] == &keyboard1) {
+          // try force back to HID mode
+          Serial.println("\n Try to force keyboard back into HID protocol");
+          keyboard1.forceHIDProtocol();
+        }
+      }
+    }
+  }
+
 #endif
 }
 
