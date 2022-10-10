@@ -148,7 +148,7 @@ USBHIDInput *hiddrivers[] = { &keyboard1 };
 #define CNT_HIDDEVICES (sizeof(hiddrivers) / sizeof(hiddrivers[0]))
 const char *hid_driver_names[CNT_DEVICES] = { "KB" };
 bool hid_driver_active[CNT_DEVICES] = { false };
-
+ 
 BTHIDInput *bthiddrivers[] = {&keyboard1};
 #define CNT_BTHIDDEVICES (sizeof(bthiddrivers)/sizeof(bthiddrivers[0]))
 const char * bthid_driver_names[CNT_HIDDEVICES] = {"KB(BT)"};

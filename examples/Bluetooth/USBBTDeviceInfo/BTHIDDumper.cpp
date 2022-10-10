@@ -36,7 +36,7 @@ class PDBGSerial_class : public Print {
   }
 };
 
-PDBGSerial_class PDBGSerial;
+static PDBGSerial_class PDBGSerial;
   
 
 bool BTHIDDumpController::show_raw_data = true;
@@ -595,9 +595,12 @@ void BTHIDDumpController::printUsageInfo(uint8_t usage_page, uint16_t usage) {
   switch (usage_page) {
     case 1:  // Generic Desktop control:
       switch (usage) {
+        case 0x01: Serial.print("(Pointer)"); break;
         case 0x02: Serial.print("(Mouse)"); break;
         case 0x04: Serial.print("(Joystick)"); break;
+        case 0x05: Serial.print("(Gamepad)"); break;
         case 0x06: Serial.print("(Keyboard)"); break;
+        case 0x07: Serial.print("(Keypad)"); break;
 
         case 0x30: Serial.print("(X)"); break;
         case 0x31: Serial.print("(Y)"); break;

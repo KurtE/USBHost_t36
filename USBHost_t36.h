@@ -31,7 +31,6 @@
 #endif
 #include "utility/imxrt_usbhs.h"
 #include "utility/msc.h"
-#include "BTHIDSupport.h"
 
 // Dear inquisitive reader, USB is a complex protocol defined with
 // very specific terminology.  To have any chance of understand this
@@ -314,7 +313,7 @@ private:
 	static void add_qh_to_periodic_schedule(Pipe_t *pipe);
 	static bool followup_Transfer(Transfer_t *transfer);
 	static void followup_Error(void);
-protected:
+public: // Maybe others may want/need to contribute memory example HID devices may want to add transfers.
 #ifdef USBHOST_PRINT_DEBUG
 	static void print_(const Transfer_t *transfer);
 	static void print_(const Transfer_t *first, const Transfer_t *last);
@@ -389,6 +388,7 @@ protected:
 	static void println_(const char *s, long n, uint8_t b = DEC) {}
 	static void println_(const char *s, unsigned long n, uint8_t b = DEC) {}
 #endif
+protected:
 	static void mk_setup(setup_t &s, uint32_t bmRequestType, uint32_t bRequest,
 			uint32_t wValue, uint32_t wIndex, uint32_t wLength) {
 		s.word1 = bmRequestType | (bRequest << 8) | (wValue << 16);
@@ -545,6 +545,7 @@ protected:
 // Device drivers may inherit from this base class, if they wish to receive
 // HID input like data from Bluetooth HID device. 
 class BluetoothController;
+class BluetoothConnection;
 
 class BTHIDInput {
 public:
@@ -559,18 +560,34 @@ public:
 		{  return  ((btdevice == nullptr) || (btdevice->strbuf == nullptr)) ? nullptr : &btdevice->strbuf->buffer[btdevice->strbuf->iStrings[strbuf_t::STR_ID_SERIAL]]; }
 private:
 	virtual bool claim_bluetooth(BluetoothController *driver, uint32_t bluetooth_class, uint8_t *remoteName) {return false;}
+	// newer version that will allow called code to know when it is being called (0 - At the connect, 1 if NO HID...)
+	// not sure if I should overload the return or not, but... 
+	virtual hidclaim_t claim_bluetooth(BluetoothConnection *btconnection, uint32_t bluetooth_class, uint8_t *remoteName, int type); 
 	virtual bool process_bluetooth_HID_data(const uint8_t *data, uint16_t length) {return false;}
 	virtual void release_bluetooth() {};
 	virtual bool remoteNameComplete(const uint8_t *remoteName) {return true;}
 	virtual void connectionComplete(void) {};
 	virtual void sdp_command_completed (bool success) {};
+
+	virtual hidclaim_t bt_claim_collection(BluetoothConnection *btconnection, uint32_t bluetooth_class, uint32_t topusage) {return CLAIM_NO;}
+	virtual void bt_hid_input_begin(uint32_t topusage, uint32_t type, int lgmin, int lgmax) {};
+	virtual void bt_hid_input_data(uint32_t usage, int32_t value) {};
+	virtual void bt_hid_input_end() {};
+	virtual void bt_disconnect_collection(Device_t *dev) {};
+
+
 	BTHIDInput *next = NULL;
 	friend class BluetoothController;
+	friend class BluetoothConnection;
+	enum { TOPUSAGE_LIST_LEN = 6 };
+	enum { USAGE_LIST_LEN = 24 };
+
 protected:
 	enum {SP_NEED_CONNECT=0x1, SP_DONT_NEED_CONNECT=0x02, SP_PS3_IDS=0x4};
 	enum {REMOTE_NAME_SIZE=32};
 	uint8_t  special_process_required = 0;
 	Device_t *btdevice = NULL;
+	BluetoothConnection *btconnect = nullptr;
 	uint8_t remote_name_[REMOTE_NAME_SIZE] = {0};
 
 };
@@ -683,8 +700,8 @@ public:
 	void startTimer(uint32_t microseconds) {hidTimer.start(microseconds);}
 	void stopTimer() {hidTimer.stop();}
 	uint8_t interfaceNumber() { return bInterfaceNumber;}
-	const uint8_t * getHIDReportDescriptor() {return descriptor;}
-	uint16_t getHIDReportDescriptorSize() { return descsize;}
+	//const uint8_t * getHIDReportDescriptor() {return descriptor_;}
+	//uint16_t getHIDReportDescriptorSize() { return descsize_;}
 protected:
 	enum { TOPUSAGE_LIST_LEN = 6 };
 	enum { USAGE_LIST_LEN = 24 };
@@ -716,7 +733,7 @@ private:
 	uint8_t bInterfaceSubClass;
 	uint8_t bInterfaceProtocol;
 	setup_t setup;
-	uint8_t descriptor[800];
+ 	uint8_t descriptor[800];
 	uint8_t report[64];
 	uint8_t report2[64];
 	uint16_t descsize;
@@ -787,7 +804,8 @@ protected:
 	void init();
 
 	// Bluetooth data
-	virtual bool claim_bluetooth(BluetoothController *driver, uint32_t bluetooth_class, uint8_t *remoteName);
+	virtual hidclaim_t claim_bluetooth(BluetoothConnection *btconnection, uint32_t bluetooth_class, uint8_t *remoteName, int type); 
+	//virtual bool claim_bluetooth(BluetoothController *driver, uint32_t bluetooth_class, uint8_t *remoteName);
 	virtual bool process_bluetooth_HID_data(const uint8_t *data, uint16_t length);
 	virtual bool remoteNameComplete(const uint8_t *remoteName);
 	virtual void release_bluetooth();
@@ -803,6 +821,14 @@ protected:	// HID functions for extra keyboard data.
 	virtual void disconnect_collection(Device_t *dev);
 	virtual bool hid_process_in_data(const Transfer_t *transfer);
 	void process_boot_keyboard_format(const uint8_t *report, bool process_mod_keys);
+
+	virtual hidclaim_t bt_claim_collection(BluetoothConnection *btconnection, uint32_t bluetooth_class, uint32_t topusage);
+	virtual void bt_hid_input_begin(uint32_t topusage, uint32_t type, int lgmin, int lgmax);
+	virtual void bt_hid_input_data(uint32_t usage, int32_t value);
+	virtual void bt_hid_input_end();
+	virtual void bt_disconnect_collection(Device_t *dev);
+
+
 
 #ifdef USBHOST_PRINT_DEBUG
 	static void print_(const Transfer_t *transfer);
@@ -913,6 +939,8 @@ private:
 	void (*extrasKeyReleasedFunction)(uint32_t top, uint16_t code);
 	uint32_t topusage_ = 0;					// What top report am I processing?
 	uint32_t topusage_type_ = 0;
+	int lgmin_ = 0;
+	int lgmax_ = 0;
 	uint32_t topusage_index_ = 0;	
 	uint8_t collections_claimed_ = 0;
 	bool keyboard_uses_boot_format_  = false;
@@ -929,7 +957,7 @@ private:
 	static bool s_forceHIDMode;
   	
   	// Test probably temporary Bluetooth HID support object
-	BTHIDSupport bthids_;
+	//BTHIDSupport bthids_;
 
 };
 
@@ -1943,32 +1971,129 @@ private:
 
 };
 
-//--------------------------------------------------------------------------
+
+
+
+//=============================================================================
+// Top level Bluetooth controller class = Main class, 
+//=============================================================================
+// Note we are moving more of the functionality to be per connection instead of indexing
+// each time... So converted from structure to class.
+class BluetoothConnection  {
+public:
+	BluetoothConnection() {init();}
+	void init() {next_= s_first_; s_first_ = this; }
+	void parse(void);
+	void parse(uint16_t type_and_report_id, const uint8_t *data, uint32_t len);
+	BTHIDInput * find_driver(uint32_t topusage);
+	BTHIDInput * find_driver(uint8_t *remoteName, int type);
+
+	void dumpHIDReportDescriptor();
+	void print_input_output_feature_bits(uint8_t val);
+	void useHIDProtocol(bool useHID) {use_hid_protocol_ = useHID;}
+
+	// member variables
+	BluetoothConnection *next_ = nullptr;
+	BTHIDInput * 	device_driver_ = nullptr;
+	BluetoothController *btController_ = nullptr;
+	uint16_t		connection_rxid_ = 0;
+	uint16_t		control_dcid_ = 0x70;
+	uint16_t		interrupt_dcid_ = 0x71;
+	uint16_t		sdp_dcid_ = 0x40;	
+	uint16_t		interrupt_scid_;
+	uint16_t		control_scid_;
+	uint16_t		sdp_scid_;
+	uint8_t			device_bdaddr_[6];// remember devices address
+	uint8_t			device_ps_repetion_mode_ ; // mode
+	uint8_t			device_clock_offset_[2];
+	uint32_t		device_class_;	// class of device. 
+	uint16_t		device_connection_handle_;	// handle to connection 
+	uint8_t    		remote_ver_;
+	uint16_t		remote_man_;
+	uint8_t			remote_subv_;
+	uint8_t			connection_complete_ = 0;	//
+	boolean			check_for_hid_descriptor_ = false;
+	uint8_t  		seq_number_ = 0;
+	bool			use_hid_protocol_ = false; // 
+	bool			sdp_connected_ = false;
+
+  enum {DNIL=0, DU32, DS32, DU64, DS64, DPB, DLVL};
+  typedef struct {
+    uint8_t  element_type;
+    uint8_t dtype;
+    uint16_t element_size;    // size of element
+    union {
+      uint32_t uw;
+      int32_t sw;
+      uint64_t luw;
+      int64_t lsw;
+      uint8_t *pb;
+    } data;
+  } sdp_element_t;
+
+
+	// More HID stuff
+	// wondering if we could share some with USB HID objects?
+	bool have_hid_descriptor_ = false;
+	uint8_t *sdp_buffer_ = nullptr;
+	uint16_t sdp_buffer_len_ = 0;
+	uint8_t descriptor_[800];
+	uint16_t descsize_;
+	bool use_report_id = true;
+	enum { TOPUSAGE_LIST_LEN = 6 };
+	enum { USAGE_LIST_LEN = 24 };
+	BTHIDInput *topusage_drivers[TOPUSAGE_LIST_LEN];
+
+	static BluetoothConnection *s_first_;
+
+    bool startSDP_ServiceSearchAttributeRequest(uint16_t range_low, uint16_t range_high, uint8_t *buffer, uint32_t cb);
+    bool SDPRequestCompleted() {return sdp_request_completed_;}
+    uint32_t SDPRequestBufferUsed() {return sdp_request_buffer_used_cnt_;}
+	// Add starts of SDP processing.
+protected:
+	friend class BluetoothController;
+	void process_sdp_service_search_request(uint8_t *data);
+	void process_sdp_service_search_response(uint8_t *data);
+	void process_sdp_service_attribute_request(uint8_t *data);
+	void process_sdp_service_attribute_response(uint8_t *data);
+	void process_sdp_service_search_attribute_request(uint8_t *data);
+	void process_sdp_service_search_attribute_response(uint8_t *data);
+
+	void handleHIDTHDRData(uint8_t *buffer);	// Pass the whole buffer...
+
+	void send_SDP_ServiceSearchRequest(uint8_t *continue_state, uint8_t cb);
+	void send_SDP_ServiceSearchAttributeRequest(uint8_t *continue_state, uint8_t cb);
+	uint16_t sdp_request_range_low_ = 0;
+	uint16_t sdp_reqest_range_high_ = 0xffff;
+	uint8_t *sdp_request_buffer_ = nullptr;
+	uint32_t sdp_request_buffer_cb_ = 0;
+	uint32_t sdp_request_buffer_used_cnt_ = 0; // cnt in bytes used.
+	volatile bool sdp_request_completed_ = true; 
+
+	// More SDP/HID stuff
+	bool startRetrieveHIDReportDescriptor();
+	bool completeSDPRequest(bool success);
+
+	int  extract_next_SDP_Token(uint8_t *pbElement, int cb_left, sdp_element_t &sdpe);
+	void print_sdpe_val(sdp_element_t &sdpe, bool verbose);
+	void decode_SDP_buffer(bool verbose_output = false);
+	void decode_SDP_Data(bool by_user_command);
+
+};
+
+//=============================================================================
+// Bluetooth Connection class
+//  Will try to handle all of the processing of one Bluetooth connection.
+//=============================================================================
 
 class BluetoothController: public USBDriver {
 public:
-	static const uint8_t MAX_CONNECTIONS = 4;
-	typedef struct {
-		BTHIDInput * 	device_driver_ = nullptr;;
-		uint16_t		connection_rxid_ = 0;
-		uint16_t		control_dcid_ = 0x70;
-		uint16_t		interrupt_dcid_ = 0x71;
-		uint16_t		sdp_dcid_ = 0x40;	
-		uint16_t		interrupt_scid_;
-		uint16_t		control_scid_;
-		uint16_t		sdp_scid_;
-		uint8_t			device_bdaddr_[6];// remember devices address
-		uint8_t			device_ps_repetion_mode_ ; // mode
-		uint8_t			device_clock_offset_[2];
-		uint32_t		device_class_;	// class of device. 
-		uint16_t		device_connection_handle_;	// handle to connection 
-		uint8_t    		remote_ver_;
-		uint16_t		remote_man_;
-		uint8_t			remote_subv_;
-		uint8_t			connection_complete_ = 0;	//
-		bool			use_hid_protocol_ = false; // 
-		bool			sdp_connected_ = false;
-	} connection_info_t;
+		enum { TOPUSAGE_LIST_LEN = 6 };
+		enum { USAGE_LIST_LEN = 24 };
+	static const uint8_t DEFAULT_CONNECTIONS = 2;
+
+
+
 
 	BluetoothController(USBHost &host, bool pair = false, const char *pin = "0000") : do_pair_device_(pair), pair_pincode_(pin), delayTimer_(this) 
 			 { init(); }
@@ -1990,18 +2115,6 @@ public:
 	void updateHIDProtocol(uint8_t protocol);
 
     // will be private
-    bool startSDP_ServiceSearchAttributeRequest(uint16_t range_low, uint16_t range_high, uint8_t *buffer, uint32_t cb);
-    bool SDPRequestCompleted() {return sdp_request_completed_;}
-    uint32_t SDPRequestBufferUsed() {return sdp_request_buffer_used_cnt_;}
-
-	void send_SDP_ServiceSearchRequest(uint8_t *continue_state, uint8_t cb);
-	void send_SDP_ServiceSearchAttributeRequest(uint8_t *continue_state, uint8_t cb);
-	uint16_t sdp_request_range_low_ = 0;
-	uint16_t sdp_reqest_range_high_ = 0xffff;
-	uint8_t *sdp_request_buffer_ = nullptr;
-	uint32_t sdp_request_buffer_cb_ = 0;
-	uint32_t sdp_request_buffer_used_cnt_ = 0; // cnt in bytes used.
-	volatile bool sdp_request_completed_ = true; 
 
 protected:
 	virtual bool claim(Device_t *device, int type, const uint8_t *descriptors, uint32_t len);
@@ -2009,17 +2122,16 @@ protected:
 	virtual void disconnect();
 	virtual void timer_event(USBDriverTimer *whichTimer);
 
-	BTHIDInput * find_driver(uint32_t device_type, uint8_t *remoteName=nullptr);
-
 	// Hack to allow PS3 to maybe change values
     uint16_t		next_dcid_ = 0x70;		// Lets try not hard coding control and interrupt dcid
-    connection_info_t connections_[MAX_CONNECTIONS];
+    
+    BluetoothConnection connections_[DEFAULT_CONNECTIONS];
     uint8_t count_connections_ = 0;
-    uint8_t current_connection_ = 0;	// need to figure out when this changes and/or... 
-    uint8_t  seq_number_ = 0;
-
+    BluetoothConnection  *current_connection_ = nullptr;	// need to figure out when this changes and/or... 
+    
 private:
 	friend class BTHIDInput;
+	friend class BluetoothConnection;
 	static void rx_callback(const Transfer_t *transfer);
 	static void rx2_callback(const Transfer_t *transfer);
 	static void tx_callback(const Transfer_t *transfer);
@@ -2037,6 +2149,7 @@ private:
 	void inline sendHCICreateConnection();
 	void inline sendHCIAuthenticationRequested();
 	void inline sendHCIAcceptConnectionRequest();
+	void inline sendHCIRejectConnectionRequest(uint8_t bdaddr[6], uint8_t error);
 	void inline sendHCILinkKeyNegativeReply();
 	void inline sendHCIPinCodeReply();
     void inline sendResetHCI();
@@ -2083,19 +2196,10 @@ private:
 	void process_l2cap_command_reject(uint8_t *data);
 	void process_l2cap_disconnect_request(uint8_t *data);
 
-	// Add starts of SDP processing.
-	void process_sdp_service_search_request(uint8_t *data);
-	void process_sdp_service_search_response(uint8_t *data);
-	void process_sdp_service_attribute_request(uint8_t *data);
-	void process_sdp_service_attribute_response(uint8_t *data);
-	void process_sdp_service_search_attribute_request(uint8_t *data);
-	void process_sdp_service_search_attribute_response(uint8_t *data);
 
 
 	void setHIDProtocol(uint8_t protocol);
-	void handleHIDTHDRData(uint8_t *buffer);	// Pass the whole buffer...
 	static BTHIDInput *available_bthid_drivers_list;
-
 
 	setup_t setup;
 	Pipe_t mypipes[4] __attribute__ ((aligned(32)));
@@ -2614,6 +2718,7 @@ public:
 
 
 };
+
 
 // do not expose these defines in Arduino sketches or other libraries
 #undef MSC_MAX_FILENAME_LEN
