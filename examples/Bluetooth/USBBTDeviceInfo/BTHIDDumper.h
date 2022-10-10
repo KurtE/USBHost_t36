@@ -33,7 +33,8 @@ public:
   
 	virtual operator bool() { return ((btdevice != nullptr) && connection_complete_); } // experiment to see if overriding makes sense here
 protected:
-	virtual bool claim_bluetooth(BluetoothController *driver, uint32_t bluetooth_class, uint8_t *remoteName);
+  virtual hidclaim_t claim_bluetooth(BluetoothConnection *btconnection, uint32_t bluetooth_class, uint8_t *remoteName, int type); 
+//	virtual bool claim_bluetooth(BluetoothController *driver, uint32_t bluetooth_class, uint8_t *remoteName);
 	virtual bool process_bluetooth_HID_data(const uint8_t *data, uint16_t length);
 	virtual void release_bluetooth();
 	virtual bool remoteNameComplete(const uint8_t *remoteName);
@@ -66,6 +67,7 @@ private:
 
   USBHIDParser *driver_;
 	BluetoothController *btdriver_ = nullptr;
+  BluetoothConnection *btconnect_ = nullptr;
   uint8_t collections_claimed = 0;
   volatile int hid_input_begin_level_ = 0;
   uint32_t index_;

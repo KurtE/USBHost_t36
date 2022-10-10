@@ -48,23 +48,27 @@ void BTHIDDumpController::init() {
   BluetoothController::driver_ready_for_bluetooth(this);
 }
 
-bool BTHIDDumpController::claim_bluetooth(BluetoothController *driver, uint32_t bluetooth_class, uint8_t *remoteName)
+hidclaim_t BTHIDDumpController::claim_bluetooth(BluetoothConnection *btconnection, uint32_t bluetooth_class, uint8_t *remoteName, int type)
+//bool BTHIDDumpController::claim_bluetooth(BluetoothController *driver, uint32_t bluetooth_class, uint8_t *remoteName)
 {
 	// How to handle combo devices? 
 	Serial.printf("BTHIDDumpController Controller::claim_bluetooth - Class %x\n", bluetooth_class);
   // start off only claiming HID type devices.
 	// If we are already in use than don't grab another one.  Likewise don't grab if it is used as USB or HID object
-	if (btdevice && (btdevice != (Device_t*)driver)) return false;
+  if (btconnect && (btconnection != btconnect)) return CLAIM_NO;
 	if (((bluetooth_class & 0xff00) == 0x2500) || ((bluetooth_class & 0xff00) == 0x500)) {
 		Serial.printf("BTHIDDumpController::claim_bluetooth TRUE\n");
-		btdriver_ = driver;
-		btdevice = (Device_t*)driver;	// remember this way 
+    btconnect = btconnection;
+    btdevice = (Device_t*)btconnect->btController_; // remember this way 
+    btdriver_ = btconnect->btController_;
+    btconnect_ = btconnect;
+
     bluetooth_class_low_byte_ = bluetooth_class & 0xff;  // remember which HID type... 
     // experiment if we want to allow the device to stay in HID mode
     //driver->useHIDProtocol(true);
-		return true;
+		return CLAIM_INTERFACE;
 	}
-	return false;
+	return CLAIM_NO;
   
 }
 bool BTHIDDumpController::process_bluetooth_HID_data(const uint8_t *data, uint16_t length)
@@ -84,6 +88,7 @@ void BTHIDDumpController::release_bluetooth()
   connection_complete_ = true;
   driver_ = nullptr;
 	btdriver_ = nullptr;
+  btconnect_ = nullptr;
   decode_input_boot_data_ = false;
   
 }
@@ -285,7 +290,7 @@ void BTHIDDumpController::print_sdpe_val(sdp_element_t &sdpe, bool verbose) {
 
 void BTHIDDumpController::decode_SDP_buffer(bool verbose_output) {
   
-  uint32_t cb_buffer_used = btdriver_->SDPRequestBufferUsed();
+  uint32_t cb_buffer_used = btconnect_->SDPRequestBufferUsed();
   
   Serial.printf("SDP Data returned: %u bytes\n", cb_buffer_used);
   if (verbose_output) MemoryHexDump(Serial, sdp_buffer, cb_buffer_used, true);
@@ -438,7 +443,7 @@ void BTHIDDumpController::decode_SDP_Data(bool by_user_command)
   Serial.println("Start Deecode SDP Data - Full Range.");
   elapsedMillis em;
 
-  bool sdp_attributeSearch_started = btdriver_->startSDP_ServiceSearchAttributeRequest(0x00, 0xffff, sdp_buffer, sizeof(sdp_buffer));
+  bool sdp_attributeSearch_started = btconnect_->startSDP_ServiceSearchAttributeRequest(0x00, 0xffff, sdp_buffer, sizeof(sdp_buffer));
   if (!sdp_attributeSearch_started && by_user_command) {
     Serial.println("*** SDP_ServiceSearchAttributeRequest failed try to do connect to SDP again");
     btdriver_->connectToSDP();  // see if we can try to startup SDP after
@@ -446,16 +451,16 @@ void BTHIDDumpController::decode_SDP_Data(bool by_user_command)
       USBHost::Task();
       delay(2);    
     }
-    sdp_attributeSearch_started = btdriver_->startSDP_ServiceSearchAttributeRequest(0x00, 0xffff, sdp_buffer, sizeof(sdp_buffer));
+    sdp_attributeSearch_started = btconnect_->startSDP_ServiceSearchAttributeRequest(0x00, 0xffff, sdp_buffer, sizeof(sdp_buffer));
   }
   
   
   if (sdp_attributeSearch_started) {
-    while ((em < 2000) && !btdriver_->SDPRequestCompleted()) {
+    while ((em < 2000) && !btconnect_->SDPRequestCompleted()) {
       USBHost::Task();
       delay(10);    
     }
-    if (!btdriver_->SDPRequestCompleted()) {
+    if (!btconnect_->SDPRequestCompleted()) {
       Serial.println("Error: Decide SDP Data timed out");
     }
     Serial.println("\n=========================== Verbose ==========================");
@@ -469,12 +474,12 @@ void BTHIDDumpController::decode_SDP_Data(bool by_user_command)
   Serial.println("\nStart Deecode SDP Data - Just Report desciptor.");
   em = 0;
 
-  if (btdriver_->startSDP_ServiceSearchAttributeRequest(0x206, 0x206, sdp_buffer, sizeof(sdp_buffer))) {
-    while ((em < 2000) && !btdriver_->SDPRequestCompleted()) {
+  if (btconnect_->startSDP_ServiceSearchAttributeRequest(0x206, 0x206, sdp_buffer, sizeof(sdp_buffer))) {
+    while ((em < 2000) && !btconnect_->SDPRequestCompleted()) {
       USBHost::Task();
       delay(10);    
     }
-    if (!btdriver_->SDPRequestCompleted()) {
+    if (!btconnect_->SDPRequestCompleted()) {
       Serial.println("Error: Decide SDP Data timed out");
     }
 
@@ -488,7 +493,7 @@ void BTHIDDumpController::decode_SDP_Data(bool by_user_command)
   
   // Now real hack:
   // Lets see if we can now print out the report descriptor.
-  uint32_t cb_left = btdriver_->SDPRequestBufferUsed();
+  uint32_t cb_left = btconnect_->SDPRequestBufferUsed();
   uint8_t *pb = &sdp_buffer[0]; // start at second byte;
   
   sdp_element_t sdpe;
