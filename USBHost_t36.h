@@ -915,9 +915,16 @@ protected:
     virtual void disconnect_collection(Device_t *dev);
 
     // Bluetooth data
-    virtual bool claim_bluetooth(BluetoothController *driver, uint32_t bluetooth_class, uint8_t *remoteName);
+    virtual hidclaim_t claim_bluetooth(BluetoothConnection *btconnection, uint32_t bluetooth_class, uint8_t *remoteName, int type);
+    //virtual bool claim_bluetooth(BluetoothController *driver, uint32_t bluetooth_class, uint8_t *remoteName);
     virtual bool process_bluetooth_HID_data(const uint8_t *data, uint16_t length);
     virtual void release_bluetooth();
+
+    virtual hidclaim_t bt_claim_collection(BluetoothConnection *btconnection, uint32_t bluetooth_class, uint32_t topusage);
+    virtual void bt_hid_input_begin(uint32_t topusage, uint32_t type, int lgmin, int lgmax);
+    virtual void bt_hid_input_data(uint32_t usage, int32_t value);
+    virtual void bt_hid_input_end();
+    virtual void bt_disconnect_collection(Device_t *dev);
 
 
 private:

@@ -22,3 +22,4 @@ examples/Bluetooth/JoystickBT/Compile.cmd
 examples/Storage/DriveInfoAll/Compile.cmd
 examples/Storage/fatFormatterUSB_TEST/Compile.cmd
 examples/KeyboardForeward/Compile.cmd
+examples/MouseKeyboardForward/Compile.cmd
