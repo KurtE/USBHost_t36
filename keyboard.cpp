@@ -113,9 +113,8 @@ static const vid_pid_t keyboard_use_hid_mode[] = {
 };
 
 
-#define print   print_
-#define println println_
-
+#define print   USBHost::print_
+#define println USBHost::println_
 
 
 
@@ -461,7 +460,9 @@ void KeyboardController::hid_input_data(uint32_t usage, int32_t value)
 
 	// Special case if this is a battery level message
 	if ((topusage_ == 0xc0000) && (usage == 0x60020)) {
-		USBHDBGSerial.printf("\tBattery level: %d min: %u max: %u\n", value, lgmin_, lgmax_);
+		battery_level_ = map (value, lgmin_, lgmax_, 0, 100);
+		USBHDBGSerial.printf("\tBattery level: %d min: %u max: %u percent: %u\n", value, lgmin_, lgmax_, battery_level_);
+
 		return;
 	}
 

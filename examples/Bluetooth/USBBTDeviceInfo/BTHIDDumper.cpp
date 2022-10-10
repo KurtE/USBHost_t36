@@ -446,7 +446,7 @@ void BTHIDDumpController::decode_SDP_Data(bool by_user_command)
   bool sdp_attributeSearch_started = btconnect_->startSDP_ServiceSearchAttributeRequest(0x00, 0xffff, sdp_buffer, sizeof(sdp_buffer));
   if (!sdp_attributeSearch_started && by_user_command) {
     Serial.println("*** SDP_ServiceSearchAttributeRequest failed try to do connect to SDP again");
-    btdriver_->connectToSDP();  // see if we can try to startup SDP after
+    btconnect_->connectToSDP();  // see if we can try to startup SDP after
     for (uint8_t i = 0; i < 10; i++ ) {
       USBHost::Task();
       delay(2);    

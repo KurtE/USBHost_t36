@@ -140,6 +140,7 @@ enum {PC_RESET = 1, PC_WRITE_CLASS_DEVICE, PC_READ_BDADDR, PC_READ_LOCAL_VERSION
       PC_WRITE_SCAN_PAGE = 200
      };
 //////////////
+    enum {CCON_INT=0x01, CCON_CONT=0x02, CCON_SDP=0x04, CCON_ALL=0x07};
 
 //////////////
 
