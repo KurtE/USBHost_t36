@@ -44,6 +44,8 @@
 #define HCI_OP_READ_REMOTE_FEATURES         0x041b
 #define HCI_OP_READ_REMOTE_VERSION_INFORMATION 0x041D
 
+#define HCI_OP_ROLE_DISCOVERY               0x0809
+
 
 #define HCI_Write_Default_Link_Policy_Settings  0x080f
 #define HCI_Set_Event_Mask                  0x0c01

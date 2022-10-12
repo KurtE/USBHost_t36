@@ -222,7 +222,7 @@ void BluetoothController::disconnect()
 
 void BluetoothController::timer_event(USBDriverTimer *whichTimer)
 {
-
+    if (timer_connection_) timer_connection_->timer_event();
 }
 
 
@@ -232,9 +232,23 @@ void BluetoothController::control(const Transfer_t *transfer)
 #ifdef DEBUG_BT_VERBOSE
     DBGPrintf("    Control callback (bluetooth): %d : ", pending_control_);
     uint8_t *buffer = (uint8_t*)transfer->buffer;
-    for (uint8_t i = 0; i < transfer->length; i++) DBGPrintf("%x ", buffer[i]);
+    for (uint8_t i = 0; i < transfer->length; i++) DBGPrintf("%02x ", buffer[i]);
     DBGPrintf("\n");
 #endif
+}
+
+bool BluetoothController::setTimer(BluetoothConnection *connection, uint32_t us)  // set to NULL ptr will clear:
+{
+    if (connection == nullptr) {
+        timer_connection_ = nullptr;
+        timer_.stop();
+        return true;
+    } else if ((timer_connection_ == nullptr) || (connection == timer_connection_)) {
+        timer_connection_ = connection;
+        timer_.start(us);
+        return true;
+    }
+    return false;
 }
 
 /************************************************************/
@@ -460,24 +474,7 @@ void BluetoothController::handle_hci_command_complete()
     case HCI_WRITE_LOCAL_NAME:              //0x0c13
         break;
     case HCI_WRITE_SCAN_ENABLE:             //0x0c1a
-        DBGPrintf("Write_Scan_enable Completed\n");
-        // See if we have driver and a remote
-        if (current_connection_->connection_complete_ == CCON_ALL) {    // We have a driver call their
-            if (current_connection_->device_driver_) {
-                current_connection_->device_driver_->connectionComplete();
-            } else if (current_connection_->check_for_hid_descriptor_) {
-                current_connection_->have_hid_descriptor_ = false;
-                current_connection_->sdp_buffer_ = current_connection_->descriptor_;
-                current_connection_->sdp_buffer_len_ = sizeof(current_connection_->descriptor_);
-
-                if (!current_connection_->startSDP_ServiceSearchAttributeRequest(0x206, 0x206, current_connection_->sdp_buffer_, current_connection_->sdp_buffer_len_)) {
-                    // Maybe try to claim_driver as we won't get a HID report.
-                    DBGPrintf("Failed to start SDP attribute request - so lets try again to find a driver");
-                    current_connection_->device_driver_ = current_connection_->find_driver(nullptr, 1);
-                }
-            }
-            current_connection_->connection_complete_ = 0;  // only call once
-        }
+        current_connection_->handle_HCI_WRITE_SCAN_ENABLE_complete(rxbuf_);
         break;
     case HCI_WRITE_SSP_MODE:                    //0x0c56
         break;
@@ -492,6 +489,9 @@ void BluetoothController::handle_hci_command_complete()
         //  DBGPrintf("Hack see if we can catch the Terios here");
         //  pending_control_ = PC_CONNECT_AFTER_SDP_DISCONNECT;
         //}
+        break;
+    case HCI_OP_ROLE_DISCOVERY:
+        current_connection_->handle_HCI_OP_ROLE_DISCOVERY_complete(rxbuf_);
         break;
 
     }
@@ -788,9 +788,11 @@ void BluetoothController::handle_hci_connection_complete() {
     // 03 0b 04 00 00 40 25 00 58 4b 00 01 00
     current_connection_->device_connection_handle_ = rxbuf_[3] + (uint16_t)(rxbuf_[4] << 8);
     DBGPrintf("    Connection Complete - ST:%x LH:%x\n", rxbuf_[2], current_connection_->device_connection_handle_);
+    sendHCIRoleDiscoveryRequest();
     if (do_pair_device_ && !(current_connection_->device_driver_ && (current_connection_->device_driver_->special_process_required & BTHIDInput::SP_DONT_NEED_CONNECT))) {
         sendHCIAuthenticationRequested();
         pending_control_ = PC_AUTHENTICATION_REQUESTED;
+#if 0 // see if we can automatically do this by looking at roles
     } else if (current_connection_->device_driver_ && (current_connection_->device_driver_->special_process_required & BTHIDInput::SP_NEED_CONNECT)) {
         DBGPrintf("   Needs connect to device(PS4?)");
         // The PS4 requires a connection request to it.
@@ -812,6 +814,7 @@ void BluetoothController::handle_hci_connection_complete() {
         packet[1] = 0x02;      // Report ID
         USBHDBGSerial.printf("SixAxis Command Issued!\r\n");
         sendL2CapCommand(packet, sizeof(packet), 0x40);
+#endif
 #endif
     }
 
@@ -1267,6 +1270,13 @@ void BluetoothController::sendHCIRemoteVersionInfoRequest() {       // 0x041D
     sendHCICommand(HCI_OP_READ_REMOTE_VERSION_INFORMATION, sizeof(connection_data), connection_data);
 }
 
+void BluetoothController::sendHCIRoleDiscoveryRequest() {
+    DBGPrintf("HCI_OP_ROLE_DISCOVERY\n");
+    uint8_t connection_data[2];
+    connection_data[0] = current_connection_->device_connection_handle_ & 0xff;
+    connection_data[1] = (current_connection_->device_connection_handle_ >> 8) & 0xff;
+    sendHCICommand(HCI_OP_ROLE_DISCOVERY, sizeof(connection_data), connection_data);
+}
 
 
 

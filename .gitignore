@@ -16,10 +16,6 @@
 *.xml
 *.sln
 *.buildinfo
-examples/Bluetooth/JoystickBT/Compile.cmd
 *.sublime-project
 *.sublime-workspace
-examples/Storage/DriveInfoAll/Compile.cmd
-examples/Storage/fatFormatterUSB_TEST/Compile.cmd
-examples/KeyboardForeward/Compile.cmd
-examples/MouseKeyboardForward/Compile.cmd
+*.cmd

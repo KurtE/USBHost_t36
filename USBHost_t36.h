@@ -1937,6 +1937,7 @@ public:
     void print_input_output_feature_bits(uint8_t val);
     void useHIDProtocol(bool useHID) {use_hid_protocol_ = useHID;}
     void connectToSDP(); // temp to see if we can do this later...
+    void timer_event();
 
     // member variables
     BluetoothConnection *next_ = nullptr;
@@ -1957,6 +1958,7 @@ public:
     uint8_t         remote_ver_;
     uint16_t        remote_man_;
     uint8_t         remote_subv_;
+    bool            connection_started_ = false; // probably can be combined
     uint8_t         connection_complete_ = 0;   //
     boolean         check_for_hid_descriptor_ = false;
     uint8_t         seq_number_ = 0;
@@ -1965,6 +1967,7 @@ public:
     uint16_t        pending_control_tx_ = 0;
 
     enum {DNIL = 0, DU32, DS32, DU64, DS64, DPB, DLVL};
+    enum {CONNECTION_TIMEOUT_US = 250000};
     typedef struct {
         uint8_t  element_type;
         uint8_t dtype;
@@ -2015,8 +2018,6 @@ protected:
     void sendl2cap_ConfigResponse(uint16_t handle, uint8_t rxid, uint16_t scid);
     void sendl2cap_DisconnectResponse(uint16_t handle, uint8_t rxid, uint16_t dcid, uint16_t scid);
 
-
-
     void process_sdp_service_search_request(uint8_t *data);
     void process_sdp_service_search_response(uint8_t *data);
     void process_sdp_service_attribute_request(uint8_t *data);
@@ -2025,6 +2026,9 @@ protected:
     void process_sdp_service_search_attribute_response(uint8_t *data);
 
     void handleHIDTHDRData(uint8_t *buffer);    // Pass the whole buffer...
+
+    void handle_HCI_WRITE_SCAN_ENABLE_complete(uint8_t *rxbuf);
+    void handle_HCI_OP_ROLE_DISCOVERY_complete(uint8_t *rxbuf);
 
     void send_SDP_ServiceSearchRequest(uint8_t *continue_state, uint8_t cb);
     void send_SDP_ServiceSearchAttributeRequest(uint8_t *continue_state, uint8_t cb);
@@ -2060,7 +2064,7 @@ public:
 
 
 
-    BluetoothController(USBHost &host, bool pair = false, const char *pin = "0000") : do_pair_device_(pair), pair_pincode_(pin), delayTimer_(this)
+    BluetoothController(USBHost &host, bool pair = false, const char *pin = "0000") : do_pair_device_(pair), pair_pincode_(pin), timer_(this)
     { init(); }
 
     enum {MAX_ENDPOINTS = 4, NUM_SERVICES = 4, }; // Max number of Bluetooth services - if you need more than 4 simply increase this number
@@ -2078,7 +2082,8 @@ public:
     void useHIDProtocol(bool useHID);
     void updateHIDProtocol(uint8_t protocol);
 
-    // will be private
+    bool setTimer(BluetoothConnection *connection, uint32_t ms);  // set to NULL ptr will clear:
+
 
 protected:
     virtual bool claim(Device_t *device, int type, const uint8_t *descriptors, uint32_t len);
@@ -2092,6 +2097,7 @@ protected:
     BluetoothConnection connections_[DEFAULT_CONNECTIONS];
     uint8_t count_connections_ = 0;
     BluetoothConnection  *current_connection_ = nullptr;    // need to figure out when this changes and/or...
+    BluetoothConnection  *timer_connection_ = nullptr;    // need to figure out when this changes and/or...
 
 private:
     friend class BTHIDInput;
@@ -2126,6 +2132,8 @@ private:
 
     void inline sendHCIRemoteNameRequest();
     void inline sendHCIRemoteVersionInfoRequest();
+    void inline sendHCIRoleDiscoveryRequest();
+    
     void handle_hci_command_complete();
     void handle_hci_command_status();
     void handle_hci_inquiry_result(bool fRSSI = false);
@@ -2172,7 +2180,7 @@ private:
 
     bool            do_pair_device_;    // Should we do a pair for a new device?
     const char      *pair_pincode_; // What pin code to use for the pairing
-    USBDriverTimer  delayTimer_;
+    USBDriverTimer  timer_;
     uint8_t         my_bdaddr_[6];  // The bluetooth dongles Bluetooth address.
     uint8_t         features[8];    // remember our local features.
 

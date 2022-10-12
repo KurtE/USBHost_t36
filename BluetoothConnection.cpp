@@ -74,6 +74,10 @@ void BluetoothConnection::initializeConnection(BluetoothController *btController
     interrupt_dcid_ = 0x71;
     sdp_dcid_ = 0x40;
     connection_complete_ = 0;
+    if (!connection_started_) {
+        connection_started_ = true;
+        btController_->setTimer(nullptr, 0); // clear out timer
+    }
     use_hid_protocol_ = false;
     sdp_connected_ = false;
     pending_control_tx_ = 0;
@@ -248,6 +252,7 @@ void  BluetoothConnection::process_l2cap_connection_request(uint8_t *data) {
 
     uint16_t psm = data[4] + ((uint16_t)data[5] << 8);
     uint16_t scid = data[6] + ((uint16_t)data[7] << 8);
+    connection_started_ = true;
     connection_rxid_ = data[1];
     DBGPrintf("    L2CAP Connection Request: ID: %d, PSM: %x, SCID: %x\n", connection_rxid_, psm, scid);
 
@@ -443,6 +448,62 @@ void BluetoothConnection::handleHIDTHDRData(uint8_t *data) {
         }
     }
 }
+
+void BluetoothConnection::handle_HCI_WRITE_SCAN_ENABLE_complete(uint8_t *rxbuf)
+{
+    // See if we have driver and a remote
+    DBGPrintf("Write_Scan_enable Completed - connection state: %x\n", connection_complete_);
+    if (connection_complete_ == CCON_ALL) {    // We have a driver call their
+        if (device_driver_) {
+            device_driver_->connectionComplete();
+        } else if (check_for_hid_descriptor_) {
+            have_hid_descriptor_ = false;
+            sdp_buffer_ = descriptor_;
+            sdp_buffer_len_ = sizeof(descriptor_);
+
+            if (!startSDP_ServiceSearchAttributeRequest(0x206, 0x206, sdp_buffer_, sdp_buffer_len_)) {
+                // Maybe try to claim_driver as we won't get a HID report.
+                DBGPrintf("Failed to start SDP attribute request - so lets try again to find a driver");
+                device_driver_ = find_driver(nullptr, 1);
+            }
+        }
+        connection_complete_ = 0;  // only call once
+    }
+
+}
+
+void BluetoothConnection::handle_HCI_OP_ROLE_DISCOVERY_complete(uint8_t *rxbuf)
+{
+    // PS4 looks something like: 0E 07 01 09 08 00 47 00 01
+    // Others look like        : 0E 07 01 09 08 00 48 00 00
+    // last byte is the interesting one says what role. 
+    DBGPrintf("ROLE_DISCOVERY Completed - Role: %x ", rxbuf[8]);
+    if (rxbuf[8] == 0) {
+        DBGPrintf("(Central)\n");
+
+        // Set a timeout
+        btController_->setTimer(this, CONNECTION_TIMEOUT_US);
+
+    } else {
+        DBGPrintf("(Peripheral)\n");
+
+        // Should maybe do some state checking before doing this, but...
+        DBGPrintf("\t** We will issue connection requsts **\n ");
+        connection_started_ = true;
+        sendl2cap_ConnectionRequest(device_connection_handle_, connection_rxid_, control_dcid_, HID_CTRL_PSM);
+    }
+}
+
+void BluetoothConnection::timer_event()
+{
+    DBGPrintf("BluetoothConnection::timer_event(%p) : %u\n", this, connection_started_);
+
+    if (!connection_started_) {
+        DBGPrintf("\t** Timed out now try issue connection requsts **\n ");
+        connection_started_ = true;
+        sendl2cap_ConnectionRequest(device_connection_handle_, connection_rxid_, control_dcid_, HID_CTRL_PSM);
+    }
+}    
 
 // l2cap support functions.
 void BluetoothConnection::sendl2cap_ConnectionResponse(uint16_t handle, uint8_t rxid, uint16_t dcid, uint16_t scid, uint8_t result) {
