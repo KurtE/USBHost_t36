@@ -1935,6 +1935,7 @@ public:
 
     void dumpHIDReportDescriptor();
     void print_input_output_feature_bits(uint8_t val);
+    void printUsageInfo(uint8_t usage_page, uint16_t usage);
     void useHIDProtocol(bool useHID) {use_hid_protocol_ = useHID;}
     void connectToSDP(); // temp to see if we can do this later...
     void timer_event();
