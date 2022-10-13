@@ -156,6 +156,13 @@ void setup()
     Serial1.begin(2000000);
     while (!Serial && millis() < 3000) ; // wait for Arduino Serial Monitor
     Serial.println("\n\nUSB Host Testing");
+    if (CrashReport) {
+        Serial.print(CrashReport);
+        Serial.println("\n *** Press any key to continue ***");
+        while (Serial.read() == -1);
+        while (Serial.read() != -1);
+    }
+
     myusb.begin();
     rawhid2.attachReceive(OnReceiveHidData);
     keyboard1.attachPress(OnPress);

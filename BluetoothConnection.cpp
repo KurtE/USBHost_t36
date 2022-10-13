@@ -65,7 +65,7 @@ BluetoothConnection *BluetoothConnection::s_first_ = NULL;
 //=============================================================================
 // initialize the connection data
 //=============================================================================
-void BluetoothConnection::initializeConnection(BluetoothController *btController, uint8_t bdaddr[6], uint32_t class_of_device)
+void BluetoothConnection::initializeConnection(BluetoothController *btController, uint8_t bdaddr[6], uint32_t class_of_device, uint8_t *device_name)
 {
     device_driver_ = nullptr;
     btController_ = btController;  // back pointer to main object
@@ -82,7 +82,7 @@ void BluetoothConnection::initializeConnection(BluetoothController *btController
     sdp_connected_ = false;
     pending_control_tx_ = 0;
 
-    device_driver_ = find_driver(nullptr, 0);
+    device_driver_ = find_driver(device_name, 0);
 
     // We need to save away the BDADDR and class link type?
     for (uint8_t i = 0; i < 6; i++) device_bdaddr_[i] = bdaddr[i];

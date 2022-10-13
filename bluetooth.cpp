@@ -123,7 +123,7 @@ bool BluetoothController::claim(Device_t *dev, int type, const uint8_t *descript
         len = 512;
     }
     for (uint16_t i = 0; i < len; i++) {
-        DBGPrintf("%x ", descriptors[i]);
+        DBGPrintf("%02x ", descriptors[i]);
         if ((i & 0x3f) == 0x3f) DBGPrintf("\n    ");
     }
     DBGPrintf("\n  ");
@@ -713,11 +713,21 @@ void BluetoothController::handle_hci_extended_inquiry_result()
         case 0xc: DBGPrintf("        Remote Control\n"); break;
         }
 
+        // We need to allocate a connection for this.
+        current_connection_ = BluetoothConnection::s_first_;
+        while (current_connection_) {
+            if (current_connection_->btController_ == nullptr) break;
+            current_connection_ = current_connection_->next_;
+        }
+        if (current_connection_ == nullptr) {
+            DBGPrintf("\tError no free BluetoothConnection object\n");
+            return;
+        }
+        count_connections_++;
+
+
         // BUGBUG, lets hard code to go to new state...
-        for (uint8_t i = 0; i < 6; i++) current_connection_->device_bdaddr_[i] = rxbuf_[index_bd + i];
-        current_connection_->device_class_ = bluetooth_class;
-        current_connection_->device_driver_ = current_connection_->find_driver(
-                index_local_name ? &rxbuf_[index_local_name] : nullptr, 0);
+        current_connection_->initializeConnection(this, &rxbuf_[index_bd], bluetooth_class, index_local_name ? &rxbuf_[index_local_name] : nullptr);
 
         current_connection_->device_ps_repetion_mode_  = rxbuf_[index_ps]; // mode
         current_connection_->device_clock_offset_[0] = rxbuf_[index_clock_offset];
@@ -851,7 +861,7 @@ void BluetoothController::handle_hci_incoming_connect() {
         count_connections_++;
 
         // Lets reinitialize some of the fields of this back to startup settings.
-        current_connection_->initializeConnection(this, &rxbuf_[2], class_of_device);
+        current_connection_->initializeConnection(this, &rxbuf_[2], class_of_device, nullptr);
 
         sendHCIRemoteNameRequest();
     }

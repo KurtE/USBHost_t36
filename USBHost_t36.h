@@ -1926,7 +1926,7 @@ public:
     BluetoothConnection() {init();}
     void init() {next_ = s_first_; s_first_ = this; }
 
-    void initializeConnection(BluetoothController *btController, uint8_t bdaddr[6], uint32_t class_of_device);
+    void initializeConnection(BluetoothController *btController, uint8_t bdaddr[6], uint32_t class_of_device, uint8_t *device_name);
 
     void parse(void);
     void parse(uint16_t type_and_report_id, const uint8_t *data, uint32_t len);
