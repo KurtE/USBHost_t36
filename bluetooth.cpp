@@ -1181,14 +1181,15 @@ void BluetoothController::rx2_data(const Transfer_t *transfer)
         // See if we should set the current_connection...
 
         if (!current_connection_ || (current_connection_->device_connection_handle_ != rx2buf_[0])) {
+            BluetoothConnection  *previous_connection = current_connection_;    // need to figure out when this changes and/or...
             current_connection_ = BluetoothConnection::s_first_;
             while (current_connection_) {
                 if (current_connection_->device_connection_handle_ == rx2buf_[0]) break;
                 current_connection_ = current_connection_->next_;
             }
             if (current_connection_ == nullptr) {
-                DBGPrintf("Error: did not find device_connection_handle_ == %x\n", rx2buf_[0]);
-                return;
+                DBGPrintf("??? did not find device_connection_handle_ use previous == %x\n", rx2buf_[0]);
+                current_connection_ = previous_connection;
             }
         }
 
