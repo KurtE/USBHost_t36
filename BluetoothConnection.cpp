@@ -254,6 +254,7 @@ void  BluetoothConnection::process_l2cap_connection_request(uint8_t *data) {
     uint16_t psm = data[4] + ((uint16_t)data[5] << 8);
     uint16_t scid = data[6] + ((uint16_t)data[7] << 8);
     connection_started_ = true;
+    btController_->setTimer(nullptr, 0); // clear out timer
     connection_rxid_ = data[1];
     DBGPrintf("    L2CAP Connection Request: ID: %d, PSM: %x, SCID: %x\n", connection_rxid_, psm, scid);
 
@@ -331,12 +332,32 @@ void BluetoothConnection::process_l2cap_config_request(uint8_t *data) {
     if (dcid == control_dcid_) {
         DBGPrintf("      Control Configuration request\n");
         sendl2cap_ConfigResponse(device_connection_handle_, data[1], control_scid_);
+        connection_complete_ |= CCON_CONT;
     } else if (dcid == interrupt_dcid_) {
         DBGPrintf("      Interrupt Configuration request\n");
         sendl2cap_ConfigResponse(device_connection_handle_, data[1], interrupt_scid_);
+        connection_complete_ |= CCON_INT;
     } else if (dcid == sdp_dcid_) {
         DBGPrintf("      SDP Configuration request\n");
         sendl2cap_ConfigResponse(device_connection_handle_, data[1], sdp_scid_);
+
+        connection_complete_ |= CCON_SDP;
+        sdp_connected_ = true;
+
+    } else if (dcid == sdp_scid_) {
+        DBGPrintf("      SDP Configuration request (But our SCID?)\n");
+        // maybe we should change the ids around?
+        sendl2cap_ConfigResponse(device_connection_handle_, data[1], sdp_scid_);
+        // We see this with some PS4? 
+
+        // Enable SCan to page mode
+        connection_complete_ |= CCON_SDP;
+        sdp_connected_ = true;
+    }
+
+    // Not sure in all case, but experiment...
+    if (connection_complete_ == CCON_ALL) {
+        btController_->sendHCIWriteScanEnable(2);
     }
 }
 
@@ -372,8 +393,8 @@ void BluetoothConnection::process_l2cap_config_response(uint8_t *data) {
         }
         connection_complete_ |= CCON_CONT;
     } else if (scid == interrupt_dcid_) {
-        // Lets try SDP connectin
-        connectToSDP(); // temp to see if we can do this later...
+        // Lets try SDP connect if we are not already connected.
+        if ((connection_complete_ & CCON_SDP) == 0) connectToSDP(); // temp to see if we can do this later...
 
         // Enable SCan to page mode
         //connection_complete_ = true;

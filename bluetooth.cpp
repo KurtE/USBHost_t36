@@ -45,6 +45,7 @@ void inline DBGPrintf(...) {};
 #else
 #define DBGPrintf USBHDBGSerial.printf
 #endif
+elapsedMillis em_rx_tx2 = 0;
 
 #ifndef DEBUG_BT_VERBOSE
 void inline VDBGPrintf(...) {};
@@ -266,7 +267,8 @@ void BluetoothController::rx2_callback(const Transfer_t *transfer)
     uint32_t len = transfer->length - ((transfer->qtd.token >> 16) & 0x7FFF);
     print_hexbytes((uint8_t*)transfer->buffer, len);
 //  DBGPrintf("<<(00 : %d): ", len);
-    DBGPrintf("<<(02 %p %u):", transfer->driver, len);
+    DBGPrintf("<<(02 %u %p %u):", (uint32_t)em_rx_tx2, transfer->driver, len);
+    em_rx_tx2 = 0;
     uint8_t *buffer = (uint8_t*)transfer->buffer;
     for (uint8_t i = 0; i < len; i++) DBGPrintf("%02X ", buffer[i]);
     DBGPrintf("\n");
@@ -1136,7 +1138,8 @@ void BluetoothController::handle_hci_remote_version_information_complete() {
 void BluetoothController::rx2_data(const Transfer_t *transfer)
 {
     uint32_t len = transfer->length - ((transfer->qtd.token >> 16) & 0x7FFF);
-    DBGPrintf("\n=====================\n<<(02):");
+    DBGPrintf("\n=====================\n<<(02 %u):", (uint32_t)em_rx_tx2);
+    em_rx_tx2 = 0;
     uint8_t *buffer = (uint8_t*)transfer->buffer;
     for (uint8_t i = 0; i < len; i++) DBGPrintf("%02X ", buffer[i]);
     DBGPrintf("\n");
@@ -1188,13 +1191,13 @@ void BluetoothController::rx2_data(const Transfer_t *transfer)
                 current_connection_ = current_connection_->next_;
             }
             if (current_connection_ == nullptr) {
-                DBGPrintf("??? did not find device_connection_handle_ use previous == %x\n", rx2buf_[0]);
                 current_connection_ = previous_connection;
+                DBGPrintf("??? did not find device_connection_handle_ use previous(%p) == %x\n", current_connection_, rx2buf_[0]);
             }
         }
 
         // Let the connection processes the message:
-        current_connection_->rx2_data(rx2buf_);
+        if (current_connection_) current_connection_->rx2_data(rx2buf_);
 
         // Queue up for next read...
         queue_Data_Transfer(rx2pipe_, rx2buf_, rx2_size_, this);
@@ -1429,19 +1432,22 @@ void BluetoothController::tx_data(const Transfer_t *transfer)
     // We assume the current connection should process this but lets make sure.
     uint8_t *buffer = (uint8_t*)transfer->buffer;
     if (!current_connection_ || (current_connection_->device_connection_handle_ != buffer[0])) {
+        BluetoothConnection  *previous_connection = current_connection_;    // need to figure out when this changes and/or...
         current_connection_ = BluetoothConnection::s_first_;
         while (current_connection_) {
             if (current_connection_->device_connection_handle_ == buffer[0]) break;
             current_connection_ = current_connection_->next_;
         }
         if (current_connection_ == nullptr) {
-            DBGPrintf("Error: did not find device_connection_handle_ == %x\n", buffer[0]);
+            current_connection_ = previous_connection; 
+
+            DBGPrintf("Error: did not find device_connection_handle_ use previous(%p)== %x\n", current_connection_, buffer[0]);
             return;
         }
     }
 
     // Let the connection processes the message:
-    current_connection_->tx_data(buffer, transfer->length);
+    if (current_connection_) current_connection_->tx_data(buffer, transfer->length);
 }
 
 
@@ -1491,7 +1497,8 @@ void BluetoothController::sendL2CapCommand(uint16_t handle, uint8_t* data, uint8
         memcpy(&txbuf_[8], data, nbytes);   // copy in the commands parameters.
     }
     nbytes = nbytes + 8;
-    DBGPrintf(">>(02):");
+    DBGPrintf(">>(02 %u):", (uint32_t)em_rx_tx2);
+    em_rx_tx2 = 0;
     for (uint8_t i = 0; i < nbytes; i++) DBGPrintf("%02X ", txbuf_[i]);
     DBGPrintf("\n");
 
