@@ -80,6 +80,7 @@ void BluetoothConnection::initializeConnection(BluetoothController *btController
     }
     use_hid_protocol_ = false;
     sdp_connected_ = false;
+    supports_SSP_ = false;
     pending_control_tx_ = 0;
 
     device_driver_ = find_driver(device_name, 0);
@@ -188,7 +189,7 @@ void BluetoothConnection::tx_data(uint8_t *data, uint16_t length)
 
 #ifdef DEBUG_BT_VERBOSE
     DBGPrintf("tx_data callback (bluetooth): %d : ", pending_control_tx_);
-    for (uint8_t i = 0; i < length; i++) DBGPrintf("%x ", data[i]);
+    for (uint8_t i = 0; i < length; i++) DBGPrintf("%02x ", data[i]);
     DBGPrintf("\n");
 #endif
     switch (pending_control_tx_) {

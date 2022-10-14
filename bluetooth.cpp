@@ -339,6 +339,21 @@ void BluetoothController::rx_data(const Transfer_t *transfer)
             handle_hci_pin_code_request();
             break;
 
+        case EV_READ_REMOTE_EXTENDED_FEATURES_COMPLETE:  //0x23
+            USBHDBGSerial.printf(" Extended features read complete:  ");
+            if ( ((rxbuf_[7] >> 0) & 0x01) == 1) {
+                USBHDBGSerial.printf("Supports SSP = ");
+                if (current_connection_) {
+                    current_connection_->supports_SSP_ = true;
+                    USBHDBGSerial.printf("%d\n", current_connection_->supports_SSP_);
+                }
+                //sendHCIRemoteNameRequest();
+            } else {
+                USBHDBGSerial.printf("No Support for SPP\n");
+            }
+            sendHCIRoleDiscoveryRequest();
+            break;
+
         case EV_LINK_KEY_REQUEST:   // 0x17
             handle_hci_link_key_request();
             break;
@@ -493,6 +508,10 @@ void BluetoothController::handle_hci_command_complete()
     case HCI_OP_ROLE_DISCOVERY:
         current_connection_->handle_HCI_OP_ROLE_DISCOVERY_complete(rxbuf_);
         break;
+    case HCI_OP_READ_REMOTE_FEATURES:
+        break; //0x041b
+    case  HCI_OP_READ_REMOTE_EXTENDED_FEATURE:
+        break;  //0x041c
 
     }
     // And queue up the next command
@@ -548,7 +567,12 @@ void BluetoothController::queue_next_hci_command()
         break;
     case PC_PIN_CODE_REPLY:
         break;
-
+    case PC_SEND_REMOTE_SUPPORTED_FEATURES:
+        pending_control_++;
+        break;
+    case PC_SEND_REMOTE_EXTENDED_FEATURES:
+        pending_control_++;
+        break;
     case PC_CONNECT_AFTER_SDP_DISCONNECT:
         // Hack see if we can get the Joystick to initiate the create a connection...
         current_connection_->sendl2cap_ConnectionRequest(current_connection_->device_connection_handle_, current_connection_->connection_rxid_, current_connection_->control_dcid_, HID_CTRL_PSM);
@@ -570,9 +594,70 @@ void BluetoothController::handle_hci_command_status()
 {
     // <event type><param count><status><num packets allowed to be sent><CMD><CMD>
     uint16_t hci_command = rxbuf_[4] + (rxbuf_[5] << 8);
+    #ifdef DEBUG_BT_VERBOSE
+        DBGPrintf("    Command %x(", hci_command);
+        switch (hci_command) {
+            case 0x0401: DBGPrintf("HCI_INQUIRY"); break;
+            case 0x0402: DBGPrintf("HCI_INQUIRY_CANCEL"); break;
+            case 0x0405: DBGPrintf("HCI_CREATE_CONNECTION"); break;
+            case 0x0409: DBGPrintf("HCI_OP_ACCEPT_CONN_REQ"); break;
+            case 0x040A: DBGPrintf("HCI_OP_REJECT_CONN_REQ"); break;
+            case 0x040C: DBGPrintf("HCI_LINK_KEY_NEG_REPLY"); break;
+            case 0x040D: DBGPrintf("HCI_PIN_CODE_REPLY"); break;
+            case 0x0411: DBGPrintf("HCI_AUTH_REQUESTED"); break;
+            case 0x0419: DBGPrintf("HCI_OP_REMOTE_NAME_REQ"); break;
+            case 0x041a: DBGPrintf("HCI_OP_REMOTE_NAME_REQ_CANCEL"); break;
+            case 0x041b: DBGPrintf("HCI_OP_READ_REMOTE_FEATURES"); break;
+            case 0x041c: DBGPrintf("HCI_OP_READ_REMOTE_EXTENDED_FEATURE"); break;
+            case 0x041D: DBGPrintf("HCI_OP_READ_REMOTE_VERSION_INFORMATION"); break;
+            case 0x0809: DBGPrintf("HCI_OP_ROLE_DISCOVERY"); break;
+            case 0x080f: DBGPrintf("HCI_Write_Default_Link_Policy_Settings"); break;
+            case 0x0c01: DBGPrintf("HCI_Set_Event_Mask"); break;
+            case 0x0c03: DBGPrintf("HCI_RESET"); break;
+            case 0x0c05: DBGPrintf("HCI_Set_Event_Filter_Clear"); break;
+            case 0x0c14: DBGPrintf("HCI_Read_Local_Name"); break;
+            case 0x0c0d: DBGPrintf("HCI_Read_Stored_Link_Key"); break;
+            case 0x0c12: DBGPrintf("HCI_DELETE_STORED_LINK_KEY"); break;
+            case 0x0c13: DBGPrintf("HCI_WRITE_LOCAL_NAME"); break;
+            case 0x0c16: DBGPrintf("Write_Connection_Accept_Timeout"); break;
+            case 0x0c1a: DBGPrintf("HCI_WRITE_SCAN_ENABLE"); break;
+            case 0x0c1b: DBGPrintf("HCI_Read_Page_Scan_Activity"); break;
+            case 0x0c23: DBGPrintf("HCI_READ_CLASS_OF_DEVICE"); break;
+            case 0x0C24: DBGPrintf("HCI_WRITE_CLASS_OF_DEV"); break;
+            case 0x0c25: DBGPrintf("HCI_Read_Voice_Setting"); break;
+            case 0x0c38: DBGPrintf("HCI_Read_Number_Of_Supported_IAC"); break;
+            case 0x0c39: DBGPrintf("HCI_Read_Current_IAC_LAP"); break;
+            case 0x0c45: DBGPrintf("HCI_WRITE_INQUIRY_MODE"); break;
+            case 0x0c46: DBGPrintf("HCI_Read_Page_Scan_Type"); break;
+            case 0x0c52: DBGPrintf("HCI_WRITE_EIR"); break;
+            case 0x0c56: DBGPrintf("HCI_WRITE_SSP_MODE"); break;
+            case 0x0c58: DBGPrintf("HCI_Read_Inquiry_Response_Transmit_Power_Level"); break;
+            case 0x0c6d: DBGPrintf("HCI_WRITE_LE_HOST_SUPPORTED"); break;
+            case 0x1003: DBGPrintf("HCI_Read_Local_Supported_Features"); break;
+            case 0x1004: DBGPrintf("HCI_Read_Local_Extended_Features"); break;
+            case 0x1005: DBGPrintf("HCI_Read_Buffer_Size"); break;
+            case 0x1009: DBGPrintf("HCI_Read_BD_ADDR"); break;
+            case 0x1001: DBGPrintf("HCI_Read_Local_Version_Information"); break;
+            case 0x1002: DBGPrintf("HCI_Read_Local_Supported_Commands"); break;
+            case 0x2001: DBGPrintf("HCI_LE_SET_EVENT_MASK"); break;
+            case 0x2002: DBGPrintf("HCI_LE_Read_Buffer_Size"); break;
+            case 0x2003: DBGPrintf("HCI_LE_Read_Local_supported_Features"); break;
+            case 0x2007: DBGPrintf("HCI_LE_READ_ADV_TX_POWER"); break;
+            case 0x2008: DBGPrintf("HCI_LE_SET_ADV_DATA"); break;
+            case 0x2009: DBGPrintf("HCI_LE_SET_SCAN_RSP_DATA"); break;
+            case 0x200f: DBGPrintf("HCI_LE_READ_WHITE_LIST_SIZE"); break;
+            case 0x2010: DBGPrintf("HCI_LE_CLEAR_WHITE_LIST"); break;
+            case 0x201c: DBGPrintf("HCI_LE_Supported_States"); break;
+        }
+        DBGPrintf(") Status %x", rxbuf_[2]);
+    #endif        
     if (rxbuf_[2]) {
 #ifdef DEBUG_BT
+    #ifdef DEBUG_BT_VERBOSE
+        DBGPrintf(" - ");
+    #else        
         DBGPrintf("    Command %x Status %x - ", hci_command, rxbuf_[2]);
+    #endif    
         switch (rxbuf_[2]) {
         case 0x01: DBGPrintf("Unknown HCI Command\n"); break;
         case 0x02: DBGPrintf("Unknown Connection Identifier\n"); break;
@@ -604,8 +689,8 @@ void BluetoothController::handle_hci_command_status()
         }
 
     } else {
-#ifdef DEBUG_BT
-        VDBGPrintf("    Command %x Status %x\n", hci_command, rxbuf_[2]);
+#ifdef DEBUG_BT_VERBOSE
+        VDBGPrintf("\n");
 #endif
     }
 }
@@ -797,11 +882,17 @@ void BluetoothController::handle_hci_connection_complete() {
     //       ST CH CH BD BD BD BD BD BD LT EN
     // 03 0b 04 00 00 40 25 00 58 4b 00 01 00
     current_connection_->device_connection_handle_ = rxbuf_[3] + (uint16_t)(rxbuf_[4] << 8);
+
+
     DBGPrintf("    Connection Complete - ST:%x LH:%x\n", rxbuf_[2], current_connection_->device_connection_handle_);
-    sendHCIRoleDiscoveryRequest();
+    //sendHCIRoleDiscoveryRequest();
     if (do_pair_device_ && !(current_connection_->device_driver_ && (current_connection_->device_driver_->special_process_required & BTHIDInput::SP_DONT_NEED_CONNECT))) {
         sendHCIAuthenticationRequested();
         pending_control_ = PC_AUTHENTICATION_REQUESTED;
+    } else {
+        //sendHCIReadRemoteExtendedFeatures();
+        sendHCIReadRemoteExtendedFeatures();
+        pending_control_ = 0;
 #if 0 // see if we can automatically do this by looking at roles
     } else if (current_connection_->device_driver_ && (current_connection_->device_driver_->special_process_required & BTHIDInput::SP_NEED_CONNECT)) {
         DBGPrintf("   Needs connect to device(PS4?)");
@@ -828,6 +919,28 @@ void BluetoothController::handle_hci_connection_complete() {
 #endif
     }
 
+#if 0    
+    static const uint8_t hci_event_mask_data[2] = {
+        // Default: 0x0000 1FFF FFFF FFFF
+        rxbuf_[3], rxbuf_[4]
+    };  // default plus extended inquiry mode
+
+    static const uint8_t hci_event_mask_data1[3] = {
+        // Default: 0x0000 1FFF FFFF FFFF
+        rxbuf_[3], rxbuf_[4], 0x01
+    };  // default plus extended inquiry mode
+    USBHDBGSerial.printf("Send Read Remote Supported Features");
+    sendHCICommand(HCI_OP_READ_REMOTE_FEATURES, sizeof(hci_event_mask_data), hci_event_mask_data);
+    pending_control_ = PC_SEND_REMOTE_SUPPORTED_FEATURES;
+    delay(100);
+
+    USBHDBGSerial.printf("Send Read Remote Extended Features");
+    sendHCICommand(HCI_OP_READ_REMOTE_EXTENDED_FEATURE, sizeof(hci_event_mask_data1), hci_event_mask_data1);
+    pending_control_ = PC_SEND_REMOTE_EXTENDED_FEATURES;
+    delay(100);
+    //USBHDBGSerial.printf("useSSP %d\n", useSSP);
+    //if(useSSP == true) sendHCIRemoteNameRequest();
+#endif
 }
 
 void BluetoothController::handle_hci_incoming_connect() {
@@ -958,48 +1071,51 @@ void BluetoothController::handle_hci_remote_name_complete() {
         for (uint8_t *psz = &rxbuf_[9]; *psz; psz++) DBGPrintf("%c", *psz);
         DBGPrintf("\n");
     }
-
-    if (current_connection_->device_driver_) {
-        if (!current_connection_->device_driver_->remoteNameComplete(&rxbuf_[9])) {
-            current_connection_->device_driver_->release_bluetooth();
-            current_connection_->device_driver_ = nullptr;
-        }
-    }
-    if (!current_connection_->device_driver_) {
-        current_connection_->device_driver_ = current_connection_->find_driver( &rxbuf_[9], 0);
-        // not sure I should call remote name again, but they already process...
+    if (current_connection_->supports_SSP_ == false) {
         if (current_connection_->device_driver_) {
-            current_connection_->device_driver_->remoteNameComplete(&rxbuf_[9]);
+            if (!current_connection_->device_driver_->remoteNameComplete(&rxbuf_[9])) {
+                current_connection_->device_driver_->release_bluetooth();
+                current_connection_->device_driver_ = nullptr;
+            }
         }
-    }
-    if (current_connection_->device_driver_) {
-        // lets save away the string.
-        uint8_t buffer_index;
-        for (buffer_index = 0; buffer_index < BTHIDInput::REMOTE_NAME_SIZE - 1; buffer_index++) {
-            current_connection_->device_driver_->remote_name_[buffer_index] = rxbuf_[9 + buffer_index];
-            if (!current_connection_->device_driver_->remote_name_[buffer_index]) break;
+        if (!current_connection_->device_driver_) {
+            current_connection_->device_driver_ = current_connection_->find_driver( &rxbuf_[9], 0);
+            // not sure I should call remote name again, but they already process...
+            if (current_connection_->device_driver_) {
+                current_connection_->device_driver_->remoteNameComplete(&rxbuf_[9]);
+            }
         }
-        current_connection_->device_driver_->remote_name_[buffer_index] = 0;    // make sure null terminated
+        if (current_connection_->device_driver_) {
+            // lets save away the string.
+            uint8_t buffer_index;
+            for (buffer_index = 0; buffer_index < BTHIDInput::REMOTE_NAME_SIZE - 1; buffer_index++) {
+                current_connection_->device_driver_->remote_name_[buffer_index] = rxbuf_[9 + buffer_index];
+                if (!current_connection_->device_driver_->remote_name_[buffer_index]) break;
+            }
+            current_connection_->device_driver_->remote_name_[buffer_index] = 0;    // make sure null terminated
 
-        if (current_connection_->device_driver_->special_process_required & BTHIDInput::SP_PS3_IDS) {
-            // Real hack see if PS3...
-            current_connection_->control_dcid_ = 0x40;
-            current_connection_->interrupt_dcid_ = 0x41;
+            if (current_connection_->device_driver_->special_process_required & BTHIDInput::SP_PS3_IDS) {
+                // Real hack see if PS3...
+                current_connection_->control_dcid_ = 0x40;
+                current_connection_->interrupt_dcid_ = 0x41;
+            } else {
+                current_connection_->control_dcid_ = next_dcid_++;
+                current_connection_->interrupt_dcid_ = next_dcid_++;
+            }
+        }
+
+        // If we are in the connection complete mode, then this is a pairing state and needed to call
+        // get remote name later.
+        if (current_connection_->connection_complete_) {
+            if (current_connection_->device_driver_) {  // We have a driver call their
+                current_connection_->device_driver_->connectionComplete();
+                current_connection_->connection_complete_ = false;  // only call once
+            }
         } else {
-            current_connection_->control_dcid_ = next_dcid_++;
-            current_connection_->interrupt_dcid_ = next_dcid_++;
-        }
-    }
-
-    // If we are in the connection complete mode, then this is a pairing state and needed to call
-    // get remote name later.
-    if (current_connection_->connection_complete_) {
-        if (current_connection_->device_driver_) {  // We have a driver call their
-            current_connection_->device_driver_->connectionComplete();
-            current_connection_->connection_complete_ = false;  // only call once
+            sendHCIAcceptConnectionRequest();
         }
     } else {
-        sendHCIAcceptConnectionRequest();
+        sendHCIAuthenticationRequested();
     }
 }
 
@@ -1270,9 +1386,6 @@ void BluetoothController::sendHCIRemoteNameRequest() {      // 0x0419
 }
 
 void BluetoothController::sendHCIRemoteVersionInfoRequest() {       // 0x041D
-    //               BD   BD   BD   BD   BD   BD   PS   0    CLK   CLK
-    //0x19 0x04 0x0A 0x79 0x22 0x23 0x0A 0xC5 0xCC 0x01 0x00 0x00 0x00
-
     DBGPrintf("HCI_OP_READ_REMOTE_VERSION_INFORMATION\n");
     uint8_t connection_data[2];
     connection_data[0] = current_connection_->device_connection_handle_ & 0xff;
@@ -1288,6 +1401,23 @@ void BluetoothController::sendHCIRoleDiscoveryRequest() {
     sendHCICommand(HCI_OP_ROLE_DISCOVERY, sizeof(connection_data), connection_data);
 }
 
+
+void BluetoothController::sendHCIReadRemoteFeatures() {
+    USBHDBGSerial.printf("HCI_OP_READ_REMOTE_FEATURES");
+    uint8_t connection_data[2];
+    connection_data[0] = current_connection_->device_connection_handle_ & 0xff;
+    connection_data[1] = (current_connection_->device_connection_handle_ >> 8) & 0xff;
+    sendHCICommand(HCI_OP_READ_REMOTE_FEATURES, sizeof(connection_data), connection_data);
+}
+
+void inline BluetoothController::sendHCIReadRemoteExtendedFeatures() {
+    uint8_t connection_data[3];
+    connection_data[0] = current_connection_->device_connection_handle_ & 0xff;
+    connection_data[1] = (current_connection_->device_connection_handle_ >> 8) & 0xff;
+    connection_data[2] = 1;
+    sendHCICommand(HCI_OP_READ_REMOTE_EXTENDED_FEATURE, sizeof(connection_data), connection_data);
+
+}
 
 
 
