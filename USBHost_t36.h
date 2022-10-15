@@ -1962,7 +1962,8 @@ public:
     uint8_t         remote_subv_;
     bool            connection_started_ = false; // probably can be combined
     volatile uint8_t connection_complete_ = 0;   //
-    boolean         check_for_hid_descriptor_ = false;
+    bool            check_for_hid_descriptor_ = false;
+    bool            find_driver_type_1_called_ = false; 
     uint8_t         seq_number_ = 0;
     bool            use_hid_protocol_ = false; //
     bool            sdp_connected_ = false;

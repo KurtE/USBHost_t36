@@ -83,6 +83,12 @@ void BluetoothConnection::initializeConnection(BluetoothController *btController
     supports_SSP_ = false;
     pending_control_tx_ = 0;
 
+    find_driver_type_1_called_ = false; // bugbug should combine:
+
+    // hack for now remember the device_name if we have one
+    if (device_name)strcpy((char*)descriptor_, device_name);
+    else descriptor_[0] = 0; // null terminated string.
+
     device_driver_ = find_driver(device_name, 0);
 
     // We need to save away the BDADDR and class link type?
@@ -95,6 +101,7 @@ void BluetoothConnection::initializeConnection(BluetoothController *btController
 //=============================================================================
 BTHIDInput * BluetoothConnection::find_driver(uint8_t *remoteName, int type)
 {
+    if (type == 1) find_driver_type_1_called_ = true;
     DBGPrintf("BluetoothController::find_driver(%x) type: %d\n", device_class_, type);
     if (device_class_ & 0x2000) DBGPrintf("  (0x2000)Limited Discoverable Mode\n");
     DBGPrintf("  (0x500)Peripheral device\n");
@@ -111,6 +118,7 @@ BTHIDInput * BluetoothConnection::find_driver(uint8_t *remoteName, int type)
         DBGPrintf("  driver %x\n", (uint32_t)driver);
         hidclaim_t claim_type = driver->claim_bluetooth(this, device_class_, remoteName, type);
         if (claim_type == CLAIM_INTERFACE) {
+            check_for_hid_descriptor_ = false;
             DBGPrintf("    *** Claimed ***\n");
             return driver;
         } else if (claim_type == CLAIM_REPORT) {
@@ -448,12 +456,18 @@ void BluetoothConnection::handleHIDTHDRData(uint8_t *data) {
     DBGPrintf("HID HDR Data: len: %d, Type: %d Con:%p\n", len, data[9], this);
 
     // ??? How to parse??? Use HID object???
+    if (!find_driver_type_1_called_ && !device_driver_ && !have_hid_descriptor_) {
+        // If we got to here and don't have driver or ... try once to get one
+        DBGPrintf("\t $$$ No HID or Driver: See if one wants it now\n");
+        // BUGBUG we initialize descriptor with name...
+        device_driver_ = find_driver(descriptor_, 1);
+    }
+
     if (device_driver_) {
         device_driver_->process_bluetooth_HID_data(&data[9], len - 1); // We skip the first byte...
     } else if (have_hid_descriptor_) {
         // nead to bias to location within data.
         parse(0x0100 | data[9], &data[10], len - 2);
-
     } else {
         switch (data[9]) {
         case 1:
@@ -486,7 +500,7 @@ void BluetoothConnection::handle_HCI_WRITE_SCAN_ENABLE_complete(uint8_t *rxbuf)
             if (!startSDP_ServiceSearchAttributeRequest(0x206, 0x206, sdp_buffer_, sdp_buffer_len_)) {
                 // Maybe try to claim_driver as we won't get a HID report.
                 DBGPrintf("Failed to start SDP attribute request - so lets try again to find a driver");
-                device_driver_ = find_driver(nullptr, 1);
+                device_driver_ = find_driver(descriptor_, 1);
             }
         }
         connection_complete_ = 0;  // only call once

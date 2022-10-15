@@ -898,12 +898,13 @@ void JoystickController::disconnect()
 
 hidclaim_t JoystickController::claim_bluetooth(BluetoothConnection *btconnection, uint32_t bluetooth_class, uint8_t *remoteName, int type)
 {
-    USBHDBGSerial.printf("JoystickController::claim_bluetooth - Class %x\n", bluetooth_class);
+    USBHDBGSerial.printf("JoystickController::claim_bluetooth - Class %x %s\n", bluetooth_class, remoteName);
     // If we are already in use than don't grab another one.  Likewise don't grab if it is used as USB or HID object
     if (btconnect && (btconnection != btconnect)) return CLAIM_NO;
     if (mydevice != NULL) return CLAIM_NO;
 
     if ((bluetooth_class & 0x0f00) == 0x500) {
+        bool name_maps_to_joystick_type = (remoteName && mapNameToJoystickType(remoteName));
         if ((bluetooth_class & 0x3C) == 0x08) {
             if (type == 1) {
                 // They are telling me to grab it now. SO say yes
@@ -911,9 +912,14 @@ hidclaim_t JoystickController::claim_bluetooth(BluetoothConnection *btconnection
                 btconnect = btconnection;
                 btdevice = (Device_t*)btconnect->btController_; // remember this way
                 btdriver_ = btconnect->btController_;
+
+                // Another big hack try calling the connectionComplete to maybe update what reports we are working with
+                if (name_maps_to_joystick_type) connectionComplete();
+
+                return CLAIM_INTERFACE;
             }
         }
-        else if (remoteName && mapNameToJoystickType(remoteName)) {
+        else if (name_maps_to_joystick_type) {
             if ((joystickType_ == PS3) || (joystickType_ == PS3_MOTION)) {
                 DBGPrintf("JoystickController::claim_bluetooth TRUE PS3 hack...\n");
                 btconnect = btconnection;
