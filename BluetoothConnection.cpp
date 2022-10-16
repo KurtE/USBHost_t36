@@ -86,7 +86,7 @@ void BluetoothConnection::initializeConnection(BluetoothController *btController
     find_driver_type_1_called_ = false; // bugbug should combine:
 
     // hack for now remember the device_name if we have one
-    if (device_name)strcpy((char*)descriptor_, device_name);
+    if (device_name)strcpy((char*)descriptor_, (const char *)device_name);
     else descriptor_[0] = 0; // null terminated string.
 
     device_driver_ = find_driver(device_name, 0);
@@ -362,11 +362,6 @@ void BluetoothConnection::process_l2cap_config_request(uint8_t *data) {
         connection_complete_ |= CCON_SDP;
         sdp_connected_ = true;
     }
-
-    // Not sure in all case, but experiment...
-    if (connection_complete_ == CCON_ALL) {
-        btController_->sendHCIWriteScanEnable(2);
-    }
 }
 
 void BluetoothConnection::process_l2cap_config_response(uint8_t *data) {
@@ -402,6 +397,7 @@ void BluetoothConnection::process_l2cap_config_response(uint8_t *data) {
         connection_complete_ |= CCON_CONT;
     } else if (scid == interrupt_dcid_) {
         // Lets try SDP connect if we are not already connected.
+        if (!check_for_hid_descriptor_) connection_complete_ |= CCON_SDP;  // Don't force connect if no is asking for HID
         if ((connection_complete_ & CCON_SDP) == 0) connectToSDP(); // temp to see if we can do this later...
 
         // Enable SCan to page mode
@@ -456,13 +452,14 @@ void BluetoothConnection::handleHIDTHDRData(uint8_t *data) {
     DBGPrintf("HID HDR Data: len: %d, Type: %d Con:%p\n", len, data[9], this);
 
     // ??? How to parse??? Use HID object???
+    #if 0
     if (!find_driver_type_1_called_ && !device_driver_ && !have_hid_descriptor_) {
         // If we got to here and don't have driver or ... try once to get one
         DBGPrintf("\t $$$ No HID or Driver: See if one wants it now\n");
         // BUGBUG we initialize descriptor with name...
         device_driver_ = find_driver(descriptor_, 1);
     }
-
+    #endif
     if (device_driver_) {
         device_driver_->process_bluetooth_HID_data(&data[9], len - 1); // We skip the first byte...
     } else if (have_hid_descriptor_) {
