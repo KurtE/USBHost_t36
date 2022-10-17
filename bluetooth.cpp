@@ -252,6 +252,30 @@ bool BluetoothController::setTimer(BluetoothConnection *connection, uint32_t us)
     return false;
 }
 
+
+/************************************************************/
+//  Try starting a pairing operation after sketch starts
+/************************************************************/
+bool BluetoothController::startDevicePairing(const char *pin)
+{
+    // What should we verify before starting this mode?
+    if (pending_control_ != 0) {
+        DBGPrintf("Pending control not zero.");
+        return false;
+    }
+
+    // BUGBUG:: probably should make copy of pin...
+    pair_pincode_ = pin;
+
+    // Try simple approach first to see if I can simply start it
+    do_pair_device_ = true;
+    pending_control_ = PC_SEND_WRITE_INQUIRE_MODE;
+    queue_next_hci_command();
+
+    return true;
+}
+
+
 /************************************************************/
 //  Interrupt-based Data Movement
 /************************************************************/
@@ -373,6 +397,10 @@ void BluetoothController::rx_data(const Transfer_t *transfer)
             break;
         case EV_IO_CAPABILITY_REQUEST:
             handle_hci_io_capability_request();
+            break;
+        case EV_NUM_COMPLETE_PKT: //13 05 01 47 00 01 00 
+            VDBGPrintf("    NUM_COMPLETE_PKT: ch:%u fh:%04x comp:%u\n",
+                rxbuf_[2], rxbuf_[3] + (rxbuf_[4] << 8), rxbuf_[rxbuf_[1]] + (rxbuf_[rxbuf_[1] + 1] << 8) );
             break;
         default:
             break;
@@ -580,7 +608,8 @@ void BluetoothController::queue_next_hci_command()
         current_connection_->sendl2cap_ConnectionRequest(current_connection_->device_connection_handle_, current_connection_->connection_rxid_, current_connection_->control_dcid_, HID_CTRL_PSM);
         pending_control_ = 0;  //
         break;
-    // None Pair mode
+    // Done Pair mode
+
     case PC_WRITE_SCAN_PAGE:
         sendHCIWriteScanEnable(2);
         pending_control_ = 0;   //
@@ -891,6 +920,8 @@ void BluetoothController::handle_hci_connection_complete() {
     if (do_pair_device_ && !(current_connection_->device_driver_ && (current_connection_->device_driver_->special_process_required & BTHIDInput::SP_DONT_NEED_CONNECT))) {
         sendHCIAuthenticationRequested();
         pending_control_ = PC_AUTHENTICATION_REQUESTED;
+        // Best place to turn it off?
+        do_pair_device_ = false;
     } else {
         //sendHCIReadRemoteExtendedFeatures();
         sendHCIReadRemoteExtendedFeatures();
@@ -1216,12 +1247,12 @@ void BluetoothController::rx2_data(const Transfer_t *transfer)
                 }
                 if (current_connection_ == nullptr) {
                     current_connection_ = previous_connection;
-                    DBGPrintf("??? did not find device_connection_handle_ use previous(%p) == %x\n", current_connection_, rx2buf_[0]);
                 }
             }
 
             // Let the connection processes the message:
             if (current_connection_) current_connection_->rx2_data(rx2buf_);
+            else DBGPrintf("??? There are no device Connections ignore packet Handle: %x\n", rx2buf_[0]);
 
             // Queue up for next read...
             queue_Data_Transfer(rx2pipe_, rx2buf_, rx2_size_, this);
@@ -1464,6 +1495,8 @@ void BluetoothController::tx_data(const Transfer_t *transfer)
 {
     // We assume the current connection should process this but lets make sure.
     uint8_t *buffer = (uint8_t*)transfer->buffer;
+    #if 0
+    // device connection handle is only valid for data packets not command packets.
     if (!current_connection_ || (current_connection_->device_connection_handle_ != buffer[0])) {
         BluetoothConnection  *previous_connection = current_connection_;    // need to figure out when this changes and/or...
         current_connection_ = BluetoothConnection::s_first_;
@@ -1474,10 +1507,11 @@ void BluetoothController::tx_data(const Transfer_t *transfer)
         if (current_connection_ == nullptr) {
             current_connection_ = previous_connection; 
 
-            DBGPrintf("Error: did not find device_connection_handle_ use previous(%p)== %x\n", current_connection_, buffer[0]);
+            DBGPrintf("Error (tx_data): did not find device_connection_handle_ use previous(%p)== %x\n", current_connection_, buffer[0]);
             return;
         }
     }
+    #endif
 
     // Let the connection processes the message:
     if (current_connection_) current_connection_->tx_data(buffer, transfer->length);

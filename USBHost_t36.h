@@ -2077,6 +2077,9 @@ public:
 
     const uint8_t*  myBDAddr(void) {return my_bdaddr_;}
 
+    // See if we can start up pairing after sketch is running. 
+    bool startDevicePairing(const char *pin);
+
     // BUGBUG version to allow some of the controlled objects to call?
     enum {CONTROL_SCID = -1, INTERRUPT_SCID = -2, SDP_SCID = -3};
     void sendL2CapCommand(uint8_t* data, uint8_t nbytes, int channel = (int)0x0001);
