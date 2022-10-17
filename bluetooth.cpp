@@ -1144,6 +1144,21 @@ void BluetoothController::rx2_data(const Transfer_t *transfer)
     for (uint8_t i = 0; i < len; i++) DBGPrintf("%02X ", buffer[i]);
     DBGPrintf("\n");
 
+    // Note the logical packets returned from the device may be larger
+    // than can fit in one of our packets, so we will detect this and
+    // the next read will be continue in or rx_buf_ in the next logical 
+    // location.  We will only go into process the next logical state
+    // when we have the full response read in... 
+
+    // Note two types of continue data. One where the device
+    // gives us a full return packet, but that packet won't fit into 
+    // one of our own packets. (PS4 response for example)
+
+
+    uint16_t hci_length = rx2buf_[2] + ((uint16_t)rx2buf_[3] << 8);
+    uint16_t l2cap_length = rx2buf_[4] + ((uint16_t)rx2buf_[5] << 8);
+
+
     // call backs.  See if this is an L2CAP reply. example
     //  HCI       | l2cap
     //48 20 10 00 | 0c 00 10 00 | 3 0 8 0 44 0 70 0 0 0 0 0
@@ -1154,17 +1169,16 @@ void BluetoothController::rx2_data(const Transfer_t *transfer)
     // followed by the message received on Linux
     //>>(02):48 20 18 00 14 00 41 00 06 00 01 00 0F 35 03 19 01 00 FF FF 35 05 0A 00 00 FF FF 00
 
-    //        0  1  2  3  4  5  6  7  9  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 ...
+    //        0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 ...
     //<<(02):48 20 1B 00 30 00 40 00 07 00 01 00 2B 00 26 36 03 AD 36 00 8E 09 00 00 0A 00 00 00 00 09 00
     //<<(02):48 10 19 00 01 35 03 19 10 00 09 00 04 35 0D 35 06 19 01 00 09 00 01 35 03 19 02 00 26
 
     //linux :47 20 34 00 30 00 40 00 07 00 00 00 2b 00 26 36 03 ad 36 00 8e 09 00 00 0a 00 00 00 00 09 00 $$
     //...                01 35 03 19 10 00 09 00 04 35 0d 35 06 19 01 00 09 00 01 35 03 19 02 00 26
     // first attempt... combine by memcpy and update count...
-    uint16_t hci_length = rx2buf_[2] + ((uint16_t)rx2buf_[3] << 8);
-    uint16_t l2cap_length = rx2buf_[4] + ((uint16_t)rx2buf_[5] << 8);
+    
+    if (rx2_continue_packet_expected_) {
 
-    if (rx2_packet_data_remaining_) {
         // Combine...
         if ((rx2buf2_[1] & 0x10) == 0) DBGPrintf("Expected continue in Packet Boundary (PB flag)");
         uint16_t hci_copy_length = rx2buf2_[2] + ((uint16_t)rx2buf2_[3] << 8);
@@ -1176,37 +1190,56 @@ void BluetoothController::rx2_data(const Transfer_t *transfer)
         DBGPrintf("<<(2 comb):");
         for (uint8_t i = 0; i < (hci_length + 4); i++) DBGPrintf("%02X ", rx2buf_[i]);
         DBGPrintf("\n");
-    }
-    //
-//  uint16_t rsp_packet_length = rx2buf_[10] + ((uint16_t)rx2buf_[11]<<8);
-    if ((hci_length == (l2cap_length + 4)) /*&& (hci_length == (rsp_packet_length+8))*/) {
-        // All the lengths appear to be correct...  need to do more...
-        // See if we should set the current_connection...
-
-        if (!current_connection_ || (current_connection_->device_connection_handle_ != rx2buf_[0])) {
-            BluetoothConnection  *previous_connection = current_connection_;    // need to figure out when this changes and/or...
-            current_connection_ = BluetoothConnection::s_first_;
-            while (current_connection_) {
-                if (current_connection_->device_connection_handle_ == rx2buf_[0]) break;
-                current_connection_ = current_connection_->next_;
-            }
-            if (current_connection_ == nullptr) {
-                current_connection_ = previous_connection;
-                DBGPrintf("??? did not find device_connection_handle_ use previous(%p) == %x\n", current_connection_, rx2buf_[0]);
-            }
-        }
-
-        // Let the connection processes the message:
-        if (current_connection_) current_connection_->rx2_data(rx2buf_);
-
-        // Queue up for next read...
-        queue_Data_Transfer(rx2pipe_, rx2buf_, rx2_size_, this);
+        rx2_packet_data_remaining_ = 0;
+        rx2_continue_packet_expected_ = 0; // don't expect another one. 
     } else {
-        // size issue?
-        rx2_packet_data_remaining_ = (l2cap_length + 4) - hci_length;
-        DBGPrintf("?? expect continue packet ?? len:%u, hci_len=%u l2cap_len=%u expect=%u\n", len, hci_length, l2cap_length, rx2_packet_data_remaining_);
-        // Queue up for next read secondary buffer.
+        if (rx2_packet_data_remaining_ == 0) {    // Previous command was fully handled
+            rx2_packet_data_remaining_ = hci_length + 4;   // length plus size of hci header
+        }       
+        // Now see if the data 
+        rx2_packet_data_remaining_ -= len;    // remove the length of this packet from length
+    }
+
+    //
+    //  uint16_t rsp_packet_length = rx2buf_[10] + ((uint16_t)rx2buf_[11]<<8);
+    if (rx2_packet_data_remaining_ == 0) {    // read started at beginning of packet so get the total length of packet
+        if ((hci_length == (l2cap_length + 4)) /*&& (hci_length == (rsp_packet_length+8))*/) {
+            // All the lengths appear to be correct...  need to do more...
+            // See if we should set the current_connection...
+
+            if (!current_connection_ || (current_connection_->device_connection_handle_ != rx2buf_[0])) {
+                BluetoothConnection  *previous_connection = current_connection_;    // need to figure out when this changes and/or...
+                current_connection_ = BluetoothConnection::s_first_;
+                while (current_connection_) {
+                    if (current_connection_->device_connection_handle_ == rx2buf_[0]) break;
+                    current_connection_ = current_connection_->next_;
+                }
+                if (current_connection_ == nullptr) {
+                    current_connection_ = previous_connection;
+                    DBGPrintf("??? did not find device_connection_handle_ use previous(%p) == %x\n", current_connection_, rx2buf_[0]);
+                }
+            }
+
+            // Let the connection processes the message:
+            if (current_connection_) current_connection_->rx2_data(rx2buf_);
+
+            // Queue up for next read...
+            queue_Data_Transfer(rx2pipe_, rx2buf_, rx2_size_, this);
+        } else {
+            // size issue?
+            rx2_packet_data_remaining_ = (l2cap_length + 4) - hci_length;
+            rx2_continue_packet_expected_ = 1;
+            DBGPrintf("?? expect continue packet ?? len:%u, hci_len=%u l2cap_len=%u expect=%u\n", len, hci_length, l2cap_length, rx2_packet_data_remaining_);
+            // Queue up for next read secondary buffer.
+            queue_Data_Transfer(rx2pipe_, rx2buf2_, rx2_size_, this);
+        }
+    } else {
+        // Need to retrieve the last few bytes of data.
+        //
+        DBGPrintf("?? RX2_Read continue on 2nd packet ?? len:%u, hci_len=%u l2cap_len=%u expect=%u\n", len, hci_length, l2cap_length, rx2_packet_data_remaining_);
         queue_Data_Transfer(rx2pipe_, rx2buf2_, rx2_size_, this);
+        rx2_continue_packet_expected_ = 0;
+        return;     // Don't process the message yet as we still have data to receive. 
     }
 
 
