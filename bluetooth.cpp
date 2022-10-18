@@ -313,7 +313,7 @@ void BluetoothController::rx_data(const Transfer_t *transfer)
     uint32_t len = transfer->length - ((transfer->qtd.token >> 16) & 0x7FFF);
     print_hexbytes((uint8_t*)transfer->buffer, len);
 //  DBGPrintf("<<(00 : %d): ", len);
-    DBGPrintf("<<(01):");
+    DBGPrintf(rx_packet_data_remaining_? "<<(01C):":"<<(01):");
     uint8_t *buffer = (uint8_t*)transfer->buffer;
     for (uint8_t i = 0; i < len; i++) DBGPrintf("%02X ", buffer[i]);
     DBGPrintf("\n");
@@ -763,16 +763,31 @@ void BluetoothController::handle_hci_inquiry_result(bool fRSSI)
             case 0xc: DBGPrintf("        Remote Control\n"); break;
             }
 
+            // We need to allocate a connection for this.
+            current_connection_ = BluetoothConnection::s_first_;
+            while (current_connection_) {
+                if (current_connection_->btController_ == nullptr) break;
+                current_connection_ = current_connection_->next_;
+            }
+            if (current_connection_ == nullptr) {
+                DBGPrintf("\tError no free BluetoothConnection object\n");
+                return;
+            }
+            count_connections_++;
+
+            // BUGBUG, lets hard code to go to new state...
+            current_connection_->initializeConnection(this, &rxbuf_[index_bd], bluetooth_class, nullptr);
+
+            current_connection_->device_ps_repetion_mode_  = rxbuf_[index_ps]; // mode
+            current_connection_->device_clock_offset_[0] = rxbuf_[index_clock_offset];
+            current_connection_->device_clock_offset_[1] = rxbuf_[index_clock_offset + 1];
+
             // BUGBUG, lets hard code to go to new state...
             for (uint8_t i = 0; i < 6; i++) current_connection_->device_bdaddr_[i] = rxbuf_[index_bd + i];
             current_connection_->device_class_ = bluetooth_class;
             current_connection_->device_driver_ = current_connection_->find_driver(nullptr, 0);
 
-            if (current_connection_->device_driver_ ) {
-                current_connection_->device_ps_repetion_mode_  = rxbuf_[index_ps]; // mode
-                current_connection_->device_clock_offset_[0] = rxbuf_[index_clock_offset];
-                current_connection_->device_clock_offset_[1] = rxbuf_[index_clock_offset + 1];
-
+            if (current_connection_->device_driver_  || current_connection_->check_for_hid_descriptor_) {
                 // Now we need to bail from inquiry and setup to try to connect...
                 sendHCIInquiryCancel();
                 pending_control_ = PC_INQUIRE_CANCEL;
@@ -921,7 +936,7 @@ void BluetoothController::handle_hci_connection_complete() {
         sendHCIAuthenticationRequested();
         pending_control_ = PC_AUTHENTICATION_REQUESTED;
         // Best place to turn it off?
-        do_pair_device_ = false;
+        //do_pair_device_ = false;
     } else {
         //sendHCIReadRemoteExtendedFeatures();
         sendHCIReadRemoteExtendedFeatures();
