@@ -149,6 +149,61 @@ uint64_t joystick_full_notify_mask = (uint64_t) - 1;
 uint8_t keyboard_battery_level = 0xff; // default have nto seen it...
 
 //=============================================================================
+// Pairing CB class
+//=============================================================================
+
+class BTPCB : public BluetoothPairingCB {
+    bool writeInquiryMode(uint8_t inquiry_mode) { 
+        tft.fillScreen(BLACK);  // clear the screen.
+        tft.setCursor(0, 0);
+        tft.setTextColor(YELLOW);
+        tft.setFont(Arial_12);
+        tft.printf("Start Pairing Mode(%u)\n", inquiry_mode);
+        tft.updateScreen();
+        return true;
+    }
+
+    // The inquiry is complete
+    bool inquiryComplete(uint8_t status) {
+        tft.printf("Inquiry complete: (%u)\n", status);
+        tft.updateScreen();
+        return true;
+    }
+
+    // we received an Inquiry result, use it?
+    bool useInquireResult(uint8_t bdaddr[6], uint32_t bluetooth_class, const uint8_t *name) {
+        tft.printf("Object found class: (%x)\n", bluetooth_class);
+        if (name) tft.printf("name: %s\n", name);
+        tft.updateScreen();
+        return true;
+    }
+
+    // Asked for PinCode?
+    bool sendPinCode(const char *pinCode) {
+        tft.printf("Pin Code: %s\n", pinCode);
+        tft.updateScreen();
+        return true;
+    }
+    
+    bool pinCodeComplete() {
+        tft.printf("Pin Code complete\n");
+        tft.updateScreen();
+        return true;
+    }
+
+    bool authenticationComplete() {
+        tft.printf("Authentication complete\n");
+        tft.updateScreen();
+        return true;
+    }
+
+
+};
+
+BTPCB btpcb;
+
+
+//=============================================================================
 // Setup
 //=============================================================================
 void setup()
@@ -234,6 +289,8 @@ void loop()
       int ch = Serial.read();
       while (Serial.read() != -1) ;
       if (ch == 'P') {
+        bluet.setBluetoothPairingCB(&btpcb);
+
         if (bluet.startDevicePairing("0000")) {
           Serial.println("Pairing operation started");
           

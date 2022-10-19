@@ -291,11 +291,11 @@ void BluetoothController::rx2_callback(const Transfer_t *transfer)
     uint32_t len = transfer->length - ((transfer->qtd.token >> 16) & 0x7FFF);
     print_hexbytes((uint8_t*)transfer->buffer, len);
 //  DBGPrintf("<<(00 : %d): ", len);
-    DBGPrintf("<<(02 %u %p %u):", (uint32_t)em_rx_tx2, transfer->driver, len);
-    em_rx_tx2 = 0;
-    uint8_t *buffer = (uint8_t*)transfer->buffer;
-    for (uint8_t i = 0; i < len; i++) DBGPrintf("%02X ", buffer[i]);
-    DBGPrintf("\n");
+//    DBGPrintf("<<(02 %u %p %u):", (uint32_t)em_rx_tx2, transfer->driver, len);
+//    em_rx_tx2 = 0;
+//    uint8_t *buffer = (uint8_t*)transfer->buffer;
+//    for (uint8_t i = 0; i < len; i++) DBGPrintf("%02X ", buffer[i]);
+//    DBGPrintf("\n");
 
     if (!transfer->driver) return;
     ((BluetoothController *)(transfer->driver))->rx2_data(transfer);
@@ -313,7 +313,7 @@ void BluetoothController::rx_data(const Transfer_t *transfer)
     uint32_t len = transfer->length - ((transfer->qtd.token >> 16) & 0x7FFF);
     print_hexbytes((uint8_t*)transfer->buffer, len);
 //  DBGPrintf("<<(00 : %d): ", len);
-    DBGPrintf(rx_packet_data_remaining_? "<<(01C):":"<<(01):");
+    DBGPrintf(rx_packet_data_remaining_? "<<C(01):":"<<(01):");
     uint8_t *buffer = (uint8_t*)transfer->buffer;
     for (uint8_t i = 0; i < len; i++) DBGPrintf("%02X ", buffer[i]);
     DBGPrintf("\n");
@@ -543,6 +543,10 @@ void BluetoothController::handle_hci_command_complete()
     case  HCI_OP_READ_REMOTE_EXTENDED_FEATURE:
         break;  //0x041c
 
+    case HCI_PIN_CODE_REPLY:
+        if (pairing_cb_) pairing_cb_->pinCodeComplete(); 
+        DBGPrintf("    HCI_PIN_CODE_REPLY completed\n");
+        break;
     }
     // And queue up the next command
     queue_next_hci_command();
@@ -573,7 +577,12 @@ void BluetoothController::queue_next_hci_command()
 
     // These are used when we are pairing.
     case PC_SEND_WRITE_INQUIRE_MODE:
-        sendHCIHCIWriteInquiryMode(2);  // lets set into extended inquire mode
+        // lets set into extended inquire mode
+        if (!sendHCIWriteInquireMode(2)) {
+            // canceled, to to scan mode
+            sendHCIWriteScanEnable(2);
+            pending_control_ = 0; 
+        }
         pending_control_++;
         break;
 
@@ -763,6 +772,12 @@ void BluetoothController::handle_hci_inquiry_result(bool fRSSI)
             case 0xc: DBGPrintf("        Remote Control\n"); break;
             }
 
+            if (pairing_cb_) {
+                if (!pairing_cb_->useInquireResult( &rxbuf_[index_bd], bluetooth_class, nullptr)) {
+                    DBGPrintf("    $$ Callback return NO\n");
+                    continue;
+                }
+            }
             // We need to allocate a connection for this.
             current_connection_ = BluetoothConnection::s_first_;
             while (current_connection_) {
@@ -844,6 +859,13 @@ void BluetoothController::handle_hci_extended_inquiry_result()
         case 0xc: DBGPrintf("        Remote Control\n"); break;
         }
 
+        // try callback. 
+        if (pairing_cb_) {
+            if (!pairing_cb_->useInquireResult( &rxbuf_[index_bd], bluetooth_class, index_local_name ? &rxbuf_[index_local_name] : nullptr)) {
+                DBGPrintf("    $$ Callback return NO\n");
+                return;
+            }
+        }
         // We need to allocate a connection for this.
         current_connection_ = BluetoothConnection::s_first_;
         while (current_connection_) {
@@ -921,6 +943,7 @@ void BluetoothController::handle_hci_io_capability_response()
 
 void BluetoothController::handle_hci_inquiry_complete() {
     VDBGPrintf("    Inquiry Complete - status: %d\n", rxbuf_[2]);
+    if (pairing_cb_) pairing_cb_->inquiryComplete(rxbuf_[2]);
 }
 
 void BluetoothController::handle_hci_connection_complete() {
@@ -1104,6 +1127,7 @@ void BluetoothController::handle_hci_authentication_complete()
     DBGPrintf("    Event: HCI Authentication complete(%d): handle: %x\n", rxbuf_[2],
               rxbuf_[3] + (rxbuf_[4] << 8));
     // Start up lcap connection...
+    if (pairing_cb_) pairing_cb_->authenticationComplete(); 
     current_connection_->connection_rxid_ = 0;
     current_connection_->sendl2cap_ConnectionRequest(current_connection_->device_connection_handle_, current_connection_->connection_rxid_, current_connection_->control_dcid_, HID_CTRL_PSM);
 }
@@ -1184,11 +1208,15 @@ void BluetoothController::handle_hci_remote_version_information_complete() {
 void BluetoothController::rx2_data(const Transfer_t *transfer)
 {
     uint32_t len = transfer->length - ((transfer->qtd.token >> 16) & 0x7FFF);
-    DBGPrintf("\n=====================\n<<(02 %u):", (uint32_t)em_rx_tx2);
+    #ifdef DEBUG_BT
+    if (rx2_continue_packet_expected_) DBGPrintf("<<P(02 %u %u):", (uint32_t)em_rx_tx2, len);
+    else if (rx2_packet_data_remaining_) DBGPrintf("<<C(02 %u %u):", (uint32_t)em_rx_tx2, len);
+    else DBGPrintf("\n=====================\n<<(02 %u %u):", (uint32_t)em_rx_tx2, len);
     em_rx_tx2 = 0;
     uint8_t *buffer = (uint8_t*)transfer->buffer;
     for (uint8_t i = 0; i < len; i++) DBGPrintf("%02X ", buffer[i]);
     DBGPrintf("\n");
+    #endif
 
     // Note the logical packets returned from the device may be larger
     // than can fit in one of our packets, so we will detect this and
@@ -1233,9 +1261,9 @@ void BluetoothController::rx2_data(const Transfer_t *transfer)
         hci_length = rx2buf_[2] + ((uint16_t)rx2buf_[3] << 8);
 
         rx2_packet_data_remaining_ = 0; // I am asuming only two for all of this
-        DBGPrintf("<<(2 comb):");
-        for (uint8_t i = 0; i < (hci_length + 4); i++) DBGPrintf("%02X ", rx2buf_[i]);
-        DBGPrintf("\n");
+        //DBGPrintf("<<(2 comb):");
+        //for (uint8_t i = 0; i < (hci_length + 4); i++) DBGPrintf("%02X ", rx2buf_[i]);
+        //DBGPrintf("\n");
         rx2_packet_data_remaining_ = 0;
         rx2_continue_packet_expected_ = 0; // don't expect another one. 
     } else {
@@ -1275,14 +1303,14 @@ void BluetoothController::rx2_data(const Transfer_t *transfer)
             // size issue?
             rx2_packet_data_remaining_ = (l2cap_length + 4) - hci_length;
             rx2_continue_packet_expected_ = 1;
-            DBGPrintf("?? expect continue packet ?? len:%u, hci_len=%u l2cap_len=%u expect=%u\n", len, hci_length, l2cap_length, rx2_packet_data_remaining_);
+            //DBGPrintf("?? expect continue packet ?? len:%u, hci_len=%u l2cap_len=%u expect=%u\n", len, hci_length, l2cap_length, rx2_packet_data_remaining_);
             // Queue up for next read secondary buffer.
             queue_Data_Transfer(rx2pipe_, rx2buf2_, rx2_size_, this);
         }
     } else {
         // Need to retrieve the last few bytes of data.
         //
-        DBGPrintf("?? RX2_Read continue on 2nd packet ?? len:%u, hci_len=%u l2cap_len=%u expect=%u\n", len, hci_length, l2cap_length, rx2_packet_data_remaining_);
+        //DBGPrintf("?? RX2_Read continue on 2nd packet ?? len:%u, hci_len=%u l2cap_len=%u expect=%u\n", len, hci_length, l2cap_length, rx2_packet_data_remaining_);
         queue_Data_Transfer(rx2pipe_, rx2buf2_, rx2_size_, this);
         rx2_continue_packet_expected_ = 0;
         return;     // Don't process the message yet as we still have data to receive. 
@@ -1309,10 +1337,18 @@ void BluetoothController::sendHCICommand(uint16_t hciCommand, uint16_t cParams, 
 }
 
 //---------------------------------------------
-void  BluetoothController::sendHCIHCIWriteInquiryMode(uint8_t inquiry_mode) {
+bool  BluetoothController::sendHCIWriteInquireMode(uint8_t inquiry_mode) {
     // Setup Inquiry mode
+    if (pairing_cb_) {
+        if (!pairing_cb_->writeInquiryMode(inquiry_mode)) {
+            DBGPrintf("WRITE_INQUIRE_MODE aborted\n");
+            return false;
+        }
+    }
+
     DBGPrintf("HCI_WRITE_INQUIRY_MODE\n");
     sendHCICommand(HCI_WRITE_INQUIRY_MODE, 1, &inquiry_mode);
+    return true;
 }
 
 void BluetoothController::sendHCISetEventMask() {
@@ -1413,6 +1449,8 @@ void BluetoothController::sendHCIPinCodeReply() {
     DBGPrintf("HCI_PIN_CODE_REPLY\n");
     uint8_t connection_data[23];
     uint8_t i;
+    // maybe allow editing?
+    if (pairing_cb_) pairing_cb_->sendPinCode(pair_pincode_);
 
     for (i = 0; i < 6; i++) connection_data[i] = current_connection_->device_bdaddr_[i];
 

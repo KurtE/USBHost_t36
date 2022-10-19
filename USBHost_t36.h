@@ -2055,6 +2055,33 @@ protected:
 };
 
 //=============================================================================
+// Bluetooth Pairing Callback class
+//=============================================================================
+class BluetoothPairingCB {
+public:
+    //  About to send HCI_WRITE_INQUIRY_MODE
+    virtual bool writeInquiryMode(uint8_t inquiry_mode) { return true;}
+
+    // The inquiry is complete
+    virtual bool inquiryComplete(uint8_t status) {return true;}
+
+    // we received an Inquiry result, use it?
+    virtual bool useInquireResult(uint8_t bdaddr[6], uint32_t bluetooth_class, const uint8_t *name)
+        {return true;}
+
+    // Asked for PinCode?
+    virtual bool sendPinCode(const char *pinCode)
+        {return true;}
+    virtual bool pinCodeComplete()
+        {return true;}
+
+    virtual bool authenticationComplete()
+        {return true;}
+
+};
+
+
+//=============================================================================
 // Bluetooth Connection class
 //  Will try to handle all of the processing of one Bluetooth connection.
 //=============================================================================
@@ -2079,6 +2106,7 @@ public:
 
     // See if we can start up pairing after sketch is running. 
     bool startDevicePairing(const char *pin);
+    void setBluetoothPairingCB(BluetoothPairingCB *pairing_cb) {pairing_cb_ = pairing_cb;}
 
     // BUGBUG version to allow some of the controlled objects to call?
     enum {CONTROL_SCID = -1, INTERRUPT_SCID = -2, SDP_SCID = -3};
@@ -2105,6 +2133,7 @@ protected:
     uint8_t count_connections_ = 0;
     BluetoothConnection  *current_connection_ = nullptr;    // need to figure out when this changes and/or...
     BluetoothConnection  *timer_connection_ = nullptr;    // need to figure out when this changes and/or...
+    BluetoothPairingCB   *pairing_cb_ = nullptr;
 
 private:
     friend class BTHIDInput;
@@ -2134,7 +2163,7 @@ private:
     void inline sendHCIReadBDAddr();
     void inline sendHCIReadLocalVersionInfo();
     void  sendHCIWriteScanEnable(uint8_t scan_op);
-    void inline sendHCIHCIWriteInquiryMode(uint8_t inquiry_mode);
+    bool inline sendHCIWriteInquireMode(uint8_t inquiry_mode);
     void inline sendHCISetEventMask();
 
     void inline sendHCIRemoteNameRequest();
