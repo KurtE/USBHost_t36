@@ -431,7 +431,7 @@ void BluetoothController::handle_hci_command_complete()
     case HCI_OP_REMOTE_NAME_REQ:
         break;
     case HCI_RESET: //0x0c03
-        if (!rxbuf_[5]) pending_control_ = PC_WRITE_CLASS_DEVICE;
+        if (!rxbuf_[5]) pending_control_ ++;
         //  If it fails, will retry. maybe should have repeat max...
         break;
     case HCI_Set_Event_Filter_Clear:    //0x0c05
@@ -467,6 +467,7 @@ void BluetoothController::handle_hci_command_complete()
     case HCI_Read_Inquiry_Response_Transmit_Power_Level: //0x0c58
         break;
     case HCI_Read_Local_Supported_Features: //0x1003
+        DBGPrintf("    HCI_Read_Local_Supported_Features\n");
         // Remember the features supported by local...
         for (buffer_index = 0; buffer_index < 8; buffer_index++) {
             features[buffer_index] = rxbuf_[buffer_index + 6];
@@ -493,7 +494,6 @@ void BluetoothController::handle_hci_command_complete()
         break;
     case HCI_LE_Supported_States:   //0x201c
         break;
-
     case HCI_Read_Local_Extended_Features:  //0x1004
         break;
     case HCI_Set_Event_Mask:                    //0x0c01
@@ -561,8 +561,20 @@ void BluetoothController::queue_next_hci_command()
     case PC_RESET:
         sendResetHCI();
         break;
+    case PC_READ_LOCAL_SUPPORTED_FEATURES:
+        sendHCIReadLocalSupportedFeatures();
+        pending_control_++;
+        break;
+    case PC_SEND_SET_EVENT_MASK:
+        sendHCISetEventMask();  // Set the event mask to include extend inquire event
+        pending_control_++;
+        break;
+    case PC_SEND_LE_SET_EVENT_MASK:
+        sendHCISetLEEventMask();  // Set the event mask to include extend inquire event
+        pending_control_++;
+        break;
     case PC_WRITE_CLASS_DEVICE:
-        sendHDCWriteClassOfDev();
+        sendHCIWriteClassOfDev();
         pending_control_++;
         break;
     case PC_READ_BDADDR:
@@ -583,11 +595,6 @@ void BluetoothController::queue_next_hci_command()
             sendHCIWriteScanEnable(2);
             pending_control_ = 0; 
         }
-        pending_control_++;
-        break;
-
-    case PC_SEND_SET_EVENT_MASK:
-        sendHCISetEventMask();  // Set the event mask to include extend inquire event
         pending_control_++;
         break;
 
@@ -1351,6 +1358,12 @@ bool  BluetoothController::sendHCIWriteInquireMode(uint8_t inquiry_mode) {
     return true;
 }
 
+void BluetoothController::sendHCIReadLocalSupportedFeatures() {
+    DBGPrintf("HCI_Read_Local_Supported_Features\n");
+    sendHCICommand(HCI_Read_Local_Supported_Features, 0, nullptr);
+
+}
+
 void BluetoothController::sendHCISetEventMask() {
     // Setup Inquiry mode
     DBGPrintf("HCI_Set_Event_Mask\n");
@@ -1359,6 +1372,16 @@ void BluetoothController::sendHCISetEventMask() {
         0xff, 0xff, 0xff, 0xff, 0xff, 0x5f, 0x00, 0x00
     };  // default plus extended inquiry mode
     sendHCICommand(HCI_Set_Event_Mask, sizeof(hci_event_mask_data), hci_event_mask_data);
+}
+
+void BluetoothController::sendHCISetLEEventMask() {
+    // Setup Inquiry mode
+    DBGPrintf("HCI_LE_SET_EVENT_MASK\n");
+    static const uint8_t hci_le_event_mask_data[8] = {
+        //default: is for bits 0 to 4 (the value 0x0000 0000 0000 001F)
+        0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };  // default plus extended inquiry mode
+    sendHCICommand(HCI_LE_SET_EVENT_MASK, sizeof(hci_le_event_mask_data), hci_le_event_mask_data);
 }
 
 //---------------------------------------------
@@ -1466,7 +1489,7 @@ void BluetoothController::sendResetHCI() {
     sendHCICommand(HCI_RESET, 0, nullptr);
 }
 
-void BluetoothController::sendHDCWriteClassOfDev() {
+void BluetoothController::sendHCIWriteClassOfDev() {
     // 0x24 0x0C 0x03 0x04 0x08 0x00
     const static uint8_t device_class_data[] = {BT_CLASS_DEVICE & 0xff, (BT_CLASS_DEVICE >> 8) & 0xff, (BT_CLASS_DEVICE >> 16) & 0xff};
     DBGPrintf("HCI_WRITE_CLASS_OF_DEV\n");

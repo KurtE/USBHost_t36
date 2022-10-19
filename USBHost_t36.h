@@ -2159,12 +2159,14 @@ private:
     void inline sendHCILinkKeyNegativeReply();
     void inline sendHCIPinCodeReply();
     void inline sendResetHCI();
-    void inline sendHDCWriteClassOfDev();
+    void inline sendHCIWriteClassOfDev();
     void inline sendHCIReadBDAddr();
+    void inline sendHCIReadLocalSupportedFeatures();
     void inline sendHCIReadLocalVersionInfo();
     void  sendHCIWriteScanEnable(uint8_t scan_op);
     bool inline sendHCIWriteInquireMode(uint8_t inquiry_mode);
     void inline sendHCISetEventMask();
+    void inline sendHCISetLEEventMask();
 
     void inline sendHCIRemoteNameRequest();
     void inline sendHCIRemoteVersionInfoRequest();
